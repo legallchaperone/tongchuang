@@ -199,6 +199,8 @@ export function createDemoBackend(): Backend {
     async signInWithPassword() { localStorage.setItem(AUTH, "1"); authCbs.forEach((c) => c(me())); },
     async signUp() { localStorage.setItem(AUTH, "1"); authCbs.forEach((c) => c(me())); return { needsConfirm: false }; },
     async sendMagicLink() { localStorage.setItem(AUTH, "1"); authCbs.forEach((c) => c(me())); },
+    async verifyEmailCode() { localStorage.setItem(AUTH, "1"); authCbs.forEach((c) => c(me())); },
+    async resendSignupEmail() { /* nothing to send in the demo */ },
     async signOut() { localStorage.removeItem(AUTH); authCbs.forEach((c) => c(null)); },
 
     getProfiles: async (ids) => delay(db.profiles.filter((p) => ids.includes(p.id))),

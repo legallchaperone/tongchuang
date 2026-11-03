@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md)
 
-![version](https://img.shields.io/badge/version-1.1.0-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.2.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -80,6 +80,7 @@ npm run dev
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`（或 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`）
 3. 绑定域名：Vercel → Settings → Domains 添加域名，在 DNS 加 CNAME 指向 `cname.vercel-dns.com`。如果域名在 Cloudflare，这条记录要设为 **DNS only**（灰色云朵）。
 4. Supabase → Authentication → URL Configuration：Site URL 设为你的域名，并加入 Redirect URLs。
+5. 有中国大陆的用户？按 [docs/china-access.md](docs/china-access.md) 把注册邮件改成验证码，并用 Cloudflare Worker 把数据请求转到自己的域名（`cloudflare/supabase-proxy.js`）。
 
 ## 更新与发版
 

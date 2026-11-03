@@ -11,6 +11,9 @@ export interface Backend {
   signInWithPassword(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<{ needsConfirm: boolean }>;
   sendMagicLink(email: string): Promise<void>;
+  /** confirm a sign-up, or finish an email-code sign-in, with the code from the email */
+  verifyEmailCode(email: string, code: string, kind: "signup" | "login"): Promise<void>;
+  resendSignupEmail(email: string): Promise<void>;
   signOut(): Promise<void>;
 
   // profiles

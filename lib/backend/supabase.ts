@@ -25,6 +25,19 @@ const toLive = (r: any): LiveStatus => ({
 });
 const toKudos = (r: any): Kudos => ({ id: r.id, sessionId: r.session_id, fromUser: r.from_user, emoji: r.emoji, createdAt: ts(r.created_at)! });
 
+/** Supabase auth errors in plain Chinese */
+function authError(e: { message: string; status?: number }): Error {
+  const m = e.message || "";
+  if (/Invalid login credentials/i.test(m)) return new Error("邮箱或密码不对");
+  if (/Email not confirmed/i.test(m)) return new Error("这个邮箱还没完成验证。请输入邮件里的验证码，或点“重新发送”。");
+  if (/User already registered/i.test(m)) return new Error("这个邮箱已经注册过了，直接登录就行");
+  if (/rate limit|too many/i.test(m) || e.status === 429) return new Error("发得太频繁了，请过一分钟再试");
+  if (/Token has expired|invalid.*(otp|token)|otp.*invalid/i.test(m)) return new Error("验证码不对或已过期，请重新发送一个");
+  if (/Password should be at least/i.test(m)) return new Error("密码至少 6 位");
+  if (/fetch|network|Failed to fetch/i.test(m)) return new Error("连不上服务器。如果你在中国大陆，可能需要稍后再试或换个网络。");
+  return new Error(m);
+}
+
 function check<T>(res: { data: T; error: any }): T {
   if (res.error) throw new Error(res.error.message);
   return res.data;
@@ -57,16 +70,25 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     },
     async signInWithPassword(email, password) {
       const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message === "Invalid login credentials" ? "邮箱或密码不对" : error.message);
+      if (error) throw authError(error);
     },
     async signUp(email, password) {
       const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
-      if (error) throw new Error(error.message);
+      if (error) throw authError(error);
       return { needsConfirm: !data.session };
     },
     async sendMagicLink(email) {
       const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname + location.search } });
-      if (error) throw new Error(error.message);
+      if (error) throw authError(error);
+    },
+    async verifyEmailCode(email, code, kind) {
+      const token = code.replace(/\s/g, "");
+      const { error } = await sb.auth.verifyOtp({ email, token, type: kind === "signup" ? "signup" : "email" });
+      if (error) throw authError(error);
+    },
+    async resendSignupEmail(email) {
+      const { error } = await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: location.origin } });
+      if (error) throw authError(error);
     },
     async signOut() { await sb.auth.signOut(); },
 
