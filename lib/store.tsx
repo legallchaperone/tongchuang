@@ -103,7 +103,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let mine = ps.find((p) => p.id === u.id);
       const tz = browserTz();
       if (!mine) {
-        mine = { id: u.id, name: (u.email || "").split("@")[0] || "同学", color: 0, tz, dailyGoalMin: 240, pomodoroMin: 25, breakMin: 5 };
+        mine = { id: u.id, name: (u.email || "").split("@")[0] || "同学", color: 0, tz, dailyGoalMin: 240, pomodoroMin: 25, breakMin: 5, look: null };
         await backend.saveProfile(mine);
         ps.push(mine);
       } else if (mine.tz !== tz) {

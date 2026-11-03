@@ -52,7 +52,7 @@ export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey }: {
                 const top = j === segs.length - 1;
                 const h = Math.max(1, y0 - y1 - (top ? 0 : 2));
                 const s = subjects.find((x) => x.id === id);
-                const fill = id == null ? "var(--line-strong)" : seriesVar(s?.color);
+                const fill = id == null ? "var(--ink-3)" : seriesVar(s?.color);
                 return top
                   ? <path key={String(id)} d={roundTop(x, y1, bw, h, Math.min(4, bw / 2, h))} fill={fill} />
                   : <rect key={String(id)} x={x} y={y1 + 2} width={bw} height={h} fill={fill} />;
@@ -82,7 +82,8 @@ export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey }: {
     </div>
   );
 }
-function roundTop(x: number, y: number, w: number, h: number, r: number) {
+function roundTop(x: number, y: number, w: number, h: number, _r: number) {
+  const r = 0; void _r;
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 
@@ -145,7 +146,7 @@ export function HourChart({ data, color, days }: { data: { h: number; ms: number
           const bh = Math.max(v > 0 ? 1 : 0, H - padB - y(v));
           return (
             <g key={h} opacity={hover == null || hover === h ? 1 : 0.45}>
-              {bh > 0 && <path d={roundTop(x, y(v), bw, bh, Math.min(3, bh, bw / 2))} fill={top3.includes(h) && v > 0 ? color : `color-mix(in srgb, ${color} 45%, var(--surface-2))`} />}
+              {bh > 0 && <path d={roundTop(x, y(v), bw, bh, Math.min(3, bh, bw / 2))} fill={top3.includes(h) && v > 0 ? color : `color-mix(in srgb, ${color} 45%, var(--panel-2))`} />}
               {h % (W < 420 ? 6 : 3) === 0 && <text x={x + bw / 2} y={H - 6} textAnchor="middle">{h}</text>}
               <rect x={padL + h * slot} y={0} width={slot} height={H - padB} fill="transparent" onMouseEnter={() => setHover(h)} />
             </g>

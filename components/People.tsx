@@ -137,9 +137,8 @@ export function FeedItem({ group }: { group: Session[] }) {
         <div className="meta">
           <span className="num">{hhmm(first.startedAt, viewerTz)}–{hhmm(s.endedAt, viewerTz)}</span>
           {s.tz !== viewerTz && <span>{p?.name || "对方"}当地 <span className="num">{hhmm(first.startedAt, s.tz)}–{hhmm(s.endedAt, s.tz)}</span></span>}
-        </div>
         {groups.length > 0 && (
-          <div className="kudos">
+          <div className="kudos" style={{ marginLeft: "auto", marginTop: 0 }}>
             {groups.map(({ e, list }) => {
               const mine = list.some((k) => k.fromUser === meId);
               const names = Array.from(new Set(list.map((k) => app.profiles[k.fromUser]?.name || "同窗"))).join("、");
@@ -151,6 +150,7 @@ export function FeedItem({ group }: { group: Session[] }) {
             })}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

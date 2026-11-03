@@ -79,6 +79,9 @@ create table if not exists public.kudos (
 );
 create index if not exists kudos_session_idx on public.kudos(session_id);
 
+-- v2: pixel character look
+alter table public.profiles add column if not exists look jsonb;
+
 -- ───────────── helpers ─────────────
 -- true when a and b are the same person or share at least one room
 create or replace function public.shares_room(a uuid, b uuid)

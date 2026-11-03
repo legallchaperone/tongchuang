@@ -5,7 +5,8 @@ import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { useAuthGate } from "@/components/Shell";
-import { Avatar, Spinner, seriesVar } from "@/components/bits";
+import { Spinner, seriesVar } from "@/components/bits";
+import { DeskScene } from "@/components/Pixel";
 import { StartPanel } from "@/components/StartPanel";
 import { IBack, IExpand, IPause, IPlay, IStop } from "@/components/Icons";
 import { Ambient, ambientLabel, setAmbient } from "@/lib/sound";
@@ -63,12 +64,12 @@ function Focus() {
   const el = focus.elapsed;
   const shown = s ? (planned ? Math.max(0, planned - el) : el) : 0;
   const progress = s ? (planned ? Math.min(1, el / planned) : (el % 3600000) / 3600000) : 0;
-  const R = 46, C = 2 * Math.PI * R;
   const subj = s?.subjectId ? app.subjects.find((x) => x.id === s.subjectId) : null;
 
   function pickAmbient(a: Ambient) { setAmb(a); setAmbient(a, 0.45); }
   function fullscreen() { document.documentElement.requestFullscreen?.().catch(() => {}); }
 
+  const me = app.me!.id;
   return (
     <div className={`focus-root ${phase}`}>
       {phase === "night" && <Stars />}
@@ -81,43 +82,39 @@ function Focus() {
       </div>
 
       <div className="focus-center">
-        {!s || s.phase === "breakDone" ? (
-          s?.phase === "breakDone" ? (
-            <>
-              <div className="focus-task">休息结束<small>已完成 {s.pomosDone} 个番茄 · 今天共 {dur(todayMs)}</small></div>
-              <div className="fbtns">
-                <button className="fbtn main" onClick={() => focus.nextPomodoro()}><IPlay /> 下一个番茄</button>
-                <button className="fbtn" onClick={() => { focus.discard(); router.push("/"); }}>今天先到这</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="focus-task" style={{ fontSize: 15, color: "rgba(242,244,248,.7)" }}>
-                {inviter ? `和 ${inviter.name} 一起专注` : `${tzCity(prof.tz)} ${hhmm(now, prof.tz)} · 今天已专注 ${dur(todayMs)}`}
-              </div>
-              <StartPanel dark initial={invite} />
-            </>
-          )
+        {!s ? (
+          <>
+            <div className="focus-task">{inviter ? `和 ${inviter.name} 一起专注` : `${tzCity(prof.tz)} ${hhmm(now, prof.tz)}`}<small>今天已专注 {dur(todayMs)}</small></div>
+            <div className="card" style={{ width: "min(580px, 100%)" }}><StartPanel dark initial={invite} /></div>
+          </>
         ) : (
           <>
-            <div className="dial">
-              <svg viewBox="0 0 100 100" aria-hidden="true">
-                <circle cx="50" cy="50" r={R} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="1.6" />
-                <circle cx="50" cy="50" r={R} fill="none" stroke={s.phase === "break" ? "#9fb4d9" : "#F2A541"} strokeWidth="1.6" strokeLinecap="round"
-                  strokeDasharray={C} strokeDashoffset={C * (1 - progress)} style={{ transition: "stroke-dashoffset 1s linear" }} />
-              </svg>
-              <div className="inner">
-                <div className="phase">{s.phase === "break" ? "休 息" : s.runningSince ? (s.mode === "pomodoro" ? `番 茄 · 第 ${s.pomosDone + 1} 个` : "专 注") : "已 暂 停"}</div>
-                <div className="clock" aria-live="off">{clock(shown)}</div>
-                <div className="phase">{planned ? `${Math.round(planned / 60000)} 分钟` : "正计时"}</div>
+            <div className="focus-stage">
+              <DeskScene p={prof} live={app.live[me]} present rain={ambient === "rain"} maxScale={5} />
+              <div className="card timerplate">
+                <div>
+                  <div className="phase">
+                    {s.phase === "breakDone" ? "休息结束" : s.phase === "break" ? "休息" : s.runningSince ? (s.mode === "pomodoro" ? `番茄 · 第 ${s.pomosDone + 1} 个` : "正计时") : "已暂停"}
+                    {planned && s.phase !== "breakDone" ? ` · ${Math.round(planned / 60000)} 分钟` : ""}
+                  </div>
+                  <div className="clock num" aria-live="off">{s.phase === "breakDone" ? "00:00" : clock(shown)}</div>
+                </div>
+                <div className="progressbar" style={{ flex: "1 1 160px", minWidth: 120 }}><div style={{ width: `${(s.phase === "breakDone" ? 1 : progress) * 100}%`, transition: "width 1s steps(1)" }} /></div>
               </div>
             </div>
             <div className="focus-task">
-              {s.phase === "break" ? "站起来走走，喝口水" : s.task || "专注"}
-              <small>{s.phase === "break" ? `刚完成第 ${s.pomosDone} 个番茄` : subj ? <><span className="dot" style={{ background: seriesVar(subj.color), marginRight: 6 }} />{subj.name}</> : "未分类"}</small>
+              {s.phase === "breakDone" ? "休息好了吗？" : s.phase === "break" ? "站起来走走，喝口水" : s.task || "专注"}
+              <small>
+                {s.phase === "break" || s.phase === "breakDone" ? `已完成 ${s.pomosDone} 个番茄 · 今天共 ${dur(todayMs)}` : subj ? <><span className="dot" style={{ background: seriesVar(subj.color), marginRight: 6 }} />{subj.name}</> : "未分类"}
+              </small>
             </div>
             <div className="fbtns">
-              {s.phase === "break" ? (
+              {s.phase === "breakDone" ? (
+                <>
+                  <button className="fbtn main" onClick={() => focus.nextPomodoro()}><IPlay /> 下一个番茄</button>
+                  <button className="fbtn" onClick={() => { focus.discard(); router.push("/"); }}>今天先到这</button>
+                </>
+              ) : s.phase === "break" ? (
                 <>
                   <button className="fbtn main" onClick={() => focus.nextPomodoro()}><IPlay /> 跳过休息</button>
                   <button className="fbtn" onClick={() => { focus.discard(); router.push("/"); }}><IStop /> 结束</button>
@@ -140,14 +137,13 @@ function Focus() {
         <div className="cofocus" aria-label="同时在专注的同窗">
           {others.map((id) => {
             const p = app.profiles[id]; const l = app.live[id];
+            if (!p) return null;
             const left = l.plannedEnd ? l.plannedEnd - now : null;
             return (
               <div className="cof" key={id}>
-                <Avatar p={p} size={30} live={l} />
-                <div>
-                  {p?.name} <span className="t">{l.state === "break" ? "休息" : left != null && left > 0 ? clock(left) : clock(liveFocusMs(l, now))}</span>
-                  <small>{tzCity(p?.tz || "UTC")} {hhmm(now, p?.tz || "UTC")} · {l.state === "break" ? "休息中" : l.task || l.subjectName || "专注中"}</small>
-                </div>
+                <DeskScene p={p} live={l} present={app.online.has(id)} maxScale={2} />
+                <div className="cap"><span>{p.name}</span><span className="t">{l.state === "break" ? "休息" : left != null && left > 0 ? clock(left) : clock(liveFocusMs(l, now))}</span></div>
+                <small>{tzCity(p.tz)} {hhmm(now, p.tz)} · {l.state === "break" ? "休息中" : l.task || l.subjectName || "专注中"}</small>
               </div>
             );
           })}

@@ -7,7 +7,8 @@ import { byDay, dailyBySubject, streaks, weekRange, withLive } from "@/lib/stats
 import { dayKey, dur, hrs, MIN, partsIn, weekdayCn } from "@/lib/time";
 import { Ring } from "@/components/bits";
 import { StartPanel } from "@/components/StartPanel";
-import { Feed, PeopleList } from "@/components/People";
+import { Feed } from "@/components/People";
+import { StudyHall } from "@/components/Hall";
 import { DailyBars } from "@/components/Charts";
 import { IPlay } from "@/components/Icons";
 
@@ -53,17 +54,30 @@ export default function TodayPage() {
         </div>
       </div>
 
+      <section>
+        {app.peopleIds.length > 1 ? <StudyHall ids={app.peopleIds} /> : (
+          <div className="grid-2" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)" }}>
+            <StudyHall ids={app.peopleIds} />
+            <div className="card pad empty" style={{ alignSelf: "stretch", display: "grid", placeContent: "center" }}>
+              <b>书房里还空着几张桌子</b>
+              创建一个自习室，把邀请码发给朋友，他们的小人就会坐到这里。
+              <div style={{ marginTop: 12 }}><Link className="btn primary" href="/rooms">去创建自习室</Link></div>
+            </div>
+          </div>
+        )}
+      </section>
+
       <div className="grid-2 today">
         <div className="stack">
           <section className="card hero" style={{ order: 1 }}>
-            <Ring value={todayMs / goal} size={148} stroke={12}>
+            <Ring value={todayMs / goal} size={136}>
               <div>
-                <div className="num" style={{ fontSize: 26, fontWeight: 500 }}>{Math.round((todayMs / goal) * 100)}%</div>
-                <div className="muted" style={{ fontSize: 12 }}>今日目标</div>
+                <div className="num big2">{Math.round((todayMs / goal) * 100)}%</div>
+                <div className="muted">今日目标</div>
               </div>
             </Ring>
             <div style={{ minWidth: 0, width: "100%" }}>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>今天已专注</div>
+              <div className="muted" style={{ marginBottom: 6 }}>今天已专注</div>
               <div className="big num">{dur(todayMs)}</div>
               <div className="goalline">{remaining > 0 ? `距离 ${dur(goal)} 的目标还差 ${dur(remaining)}` : "今天的目标已经完成 ✓"}</div>
               <div className="kpis">
@@ -78,8 +92,8 @@ export default function TodayPage() {
             {focusing ? (
               <div className="cardbody" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", paddingTop: 20 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div className="muted" style={{ fontSize: 12 }}>{focus.state!.phase === "break" ? "休息中" : focus.state!.runningSince ? "正在专注" : "已暂停"}</div>
-                  <div style={{ fontSize: 17, fontWeight: 600, overflowWrap: "anywhere" }}>{focus.state!.task || "专注"}</div>
+                  <div className="muted">{focus.state!.phase === "break" ? "休息中" : focus.state!.runningSince ? "正在专注" : "已暂停"}</div>
+                  <div className="big2" style={{ overflowWrap: "anywhere" }}>{focus.state!.task || "专注"}</div>
                 </div>
                 <Link href="/focus" className="btn lamp lg"><IPlay /> 回到专注</Link>
               </div>
@@ -100,12 +114,8 @@ export default function TodayPage() {
         </div>
 
         <div className="stack">
-          <section className="card" style={{ order: 2 }}>
-            <div className="cardhead"><h2>同窗此刻</h2><span className="hint">{others.length ? `${others.filter((id) => app.online.has(id)).length} 人在线` : ""}</span></div>
-            <div style={{ paddingTop: 8 }}><PeopleList ids={app.peopleIds} /></div>
-          </section>
           <section className="card" style={{ order: 5 }}>
-            <div className="cardhead" style={{ paddingBottom: 12 }}><h2>动态</h2><span className="hint">给认真的人点个赞</span></div>
+            <div className="cardhead" style={{ paddingBottom: 10 }}><h2>动态</h2><span className="hint">给认真的人点个赞</span></div>
             <Feed userIds={app.peopleIds} limit={12} />
           </section>
         </div>

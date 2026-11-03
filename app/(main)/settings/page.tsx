@@ -6,6 +6,12 @@ import { browserTz, COMMON_TZS, hhmm, tzCity } from "@/lib/time";
 import { Avatar, seriesVar } from "@/components/bits";
 import { resetDemo } from "@/lib/backend/demo";
 import type { Profile } from "@/lib/types";
+import { DeskScene } from "@/components/Pixel";
+import { defaultLook, HAIR_COLORS, HAIR_NAMES, SKINS } from "@/lib/pixel";
+
+function Swatch({ color, on, label, onClick }: { color: string; on: boolean; label: string; onClick: () => void }) {
+  return <button aria-label={label} aria-pressed={on} onClick={onClick} style={{ width: 28, height: 28, background: color, border: "2px solid var(--edge)", boxShadow: on ? "0 0 0 2px var(--panel), 0 0 0 4px var(--edge)" : "inset 0 -4px 0 rgba(0,0,0,.2)", cursor: "pointer" }} />;
+}
 
 export default function SettingsPage() {
   const app = useApp();
@@ -15,6 +21,7 @@ export default function SettingsPage() {
   const [notif, setNotif] = useState<string>("default");
   useEffect(() => { if ("Notification" in window) setNotif(Notification.permission); }, []);
   const dirty = JSON.stringify(p) !== JSON.stringify(app.myProfile);
+  const look = p.look ?? defaultLook(p.id);
   const mine = app.subjects.filter((s) => s.userId === app.me!.id);
   const tzs = Array.from(new Set([browserTz(), p.tz, ...COMMON_TZS]));
 
@@ -37,20 +44,38 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="field">
-          <span className="label">代表色</span>
-          <div className="chips">
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((c) => (
-              <button key={c} aria-label={`颜色 ${c + 1}`} aria-pressed={p.color === c} onClick={() => setP({ ...p, color: c })}
-                style={{ width: 30, height: 30, borderRadius: "50%", background: seriesVar(c), border: p.color === c ? "3px solid var(--ink)" : "3px solid transparent", outline: "2px solid var(--surface)", outlineOffset: -5 }} />
-            ))}
-          </div>
-        </div>
-        <div className="field">
           <label className="label" htmlFor="set-tz">时区</label>
           <select id="set-tz" className="input select" value={p.tz} onChange={(e) => setP({ ...p, tz: e.target.value })}>
             {tzs.map((t) => <option key={t} value={t}>{tzCity(t)} · {t} · 现在 {hhmm(Date.now(), t)}</option>)}
           </select>
           <span className="muted" style={{ fontSize: 12, marginTop: 6 }}>每次打开会自动跟随设备时区，出差或换国家时不用手动改。“今天”按这个时区计算。</span>
+        </div>
+      </section>
+
+      <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <h2>我的小人</h2>
+        <div className="grid-2" style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 16 }}>
+          <div className="card" style={{ alignSelf: "start" }}>
+            <DeskScene p={{ ...p, look }} live={{ userId: p.id, state: "focus", task: "", subjectName: "", subjectColor: null, mode: "pomodoro", startedAt: Date.now(), plannedEnd: null, accumulatedMs: 0, runningSince: Date.now(), updatedAt: Date.now() }} present maxScale={4} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+            <div className="field">
+              <span className="label">发型</span>
+              <div className="chips">{HAIR_NAMES.map((n, i) => <button key={n} className="chip" aria-pressed={look.hair === i} onClick={() => setP({ ...p, look: { ...look, hair: i } })}>{n}</button>)}</div>
+            </div>
+            <div className="field">
+              <span className="label">发色</span>
+              <div className="chips">{HAIR_COLORS.map((c, i) => <Swatch key={c} color={c} on={look.hairColor === i} label={`发色 ${i + 1}`} onClick={() => setP({ ...p, look: { ...look, hairColor: i } })} />)}</div>
+            </div>
+            <div className="field">
+              <span className="label">肤色</span>
+              <div className="chips">{SKINS.map((c, i) => <Swatch key={c} color={c} on={look.skin === i} label={`肤色 ${i + 1}`} onClick={() => setP({ ...p, look: { ...look, skin: i } })} />)}</div>
+            </div>
+            <div className="field">
+              <span className="label">衣服（也是你在图表里的颜色）</span>
+              <div className="chips">{[0, 1, 2, 3, 4, 5, 6, 7].map((c) => <Swatch key={c} color={seriesVar(c)} on={p.color === c} label={`颜色 ${c + 1}`} onClick={() => setP({ ...p, color: c })} />)}</div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -72,8 +97,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <button className="btn primary" disabled={!dirty} onClick={save}>保存</button>
+      <div className="savebar">
+        <button className="btn primary lg" disabled={!dirty} onClick={save}>保存</button>
         {saved && <span className="up">已保存</span>}
       </div>
 

@@ -108,7 +108,7 @@ export default function StatsPage() {
 
       <section className="card">
         <div className="cardhead"><h2>每日专注{range > 90 ? "（近 90 天）" : ""}</h2>
-          <div className="legend">{subjects.filter((s) => rows.some((r) => r.parts.has(s.id))).map((s) => <span key={s.id}><i style={{ background: seriesVar(s.color) }} />{s.name}</span>)}{rows.some((r) => r.parts.has(null)) && <span><i style={{ background: "var(--line-strong)" }} />未分类</span>}</div>
+          <div className="legend">{subjects.filter((s) => rows.some((r) => r.parts.has(s.id))).map((s) => <span key={s.id}><i style={{ background: seriesVar(s.color) }} />{s.name}</span>)}{rows.some((r) => r.parts.has(null)) && <span><i style={{ background: "var(--ink-3)" }} />未分类</span>}</div>
         </div>
         <div className="cardbody"><DailyBars rows={rows} subjects={subjects} goalMs={goal} height={220} todayKey={dayKey(now, tz)} /></div>
       </section>
@@ -133,7 +133,7 @@ export default function StatsPage() {
         <section className="card">
           <div className="cardhead"><h2>科目分布</h2></div>
           <div className="cardbody">
-            {subj.length ? <HBars items={subj.map((x) => ({ key: String(x.id), label: <><span className="dot" style={{ background: x.subject ? seriesVar(x.subject.color) : "var(--line-strong)" }} />{x.subject?.name || "未分类"}</>, ms: x.ms, color: x.subject ? seriesVar(x.subject.color) : "var(--line-strong)" }))} /> : <p className="muted">暂无数据</p>}
+            {subj.length ? <HBars items={subj.map((x) => ({ key: String(x.id), label: <><span className="dot" style={{ background: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" }} />{x.subject?.name || "未分类"}</>, ms: x.ms, color: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" }))} /> : <p className="muted">暂无数据</p>}
           </div>
         </section>
         <section className="card">
@@ -153,7 +153,7 @@ export default function StatsPage() {
               {history.map((s) => {
                 const sub = subjects.find((x) => x.id === s.subjectId);
                 return (
-                  <tr key={s.id} style={{ borderTop: "1px solid var(--line)" }}>
+                  <tr key={s.id} style={{ borderTop: "1px solid var(--slot)" }}>
                     <td style={{ padding: "9px 20px" }} className="num">{dayKey(s.startedAt, tz).slice(5).replace("-", "/")}</td>
                     <td className="num muted">{hhmm(s.startedAt, tz)}–{hhmm(s.endedAt, tz)}</td>
                     <td style={{ maxWidth: 320 }}>{sub && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(sub.color) }} />{sub.name}</span>}{s.task || "自习"}{s.note && <div className="muted" style={{ fontSize: 12 }}>{s.note}</div>}</td>

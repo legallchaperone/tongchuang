@@ -10,6 +10,8 @@ export interface Profile {
   dailyGoalMin: number;
   pomodoroMin: number;
   breakMin: number;
+  /** pixel character look; null = derived from id */
+  look: { skin: number; hair: number; hairColor: number } | null;
 }
 
 export interface Subject {

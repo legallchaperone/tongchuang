@@ -8,6 +8,7 @@ import { clock, dayKey, dur, hhmm, hrs, partsIn, phaseAt, phaseLabel, tzCity, tz
 import { Avatar, StatePill, seriesVar } from "@/components/bits";
 import { TimezoneBand } from "@/components/Charts";
 import { Feed } from "@/components/People";
+import { StudyHall } from "@/components/Hall";
 import { IBack, ICopy, IHand, IUsers } from "@/components/Icons";
 import type { UserId } from "@/lib/types";
 
@@ -51,12 +52,12 @@ export default function RoomPage() {
     <div className="page">
       <div className="pagehead">
         <div>
-          <Link href="/rooms" className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, marginBottom: 6 }}><span style={{ width: 14, display: "inline-flex" }}><IBack /></span>自习室</Link>
+          <Link href="/rooms" className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 4 }}><IBack />自习室</Link>
           <h1>{room.name}</h1>
           <p className="sub">{members.length} 人 · 横跨 {new Set(members.map((m) => m.tz)).size} 个时区</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="card num" style={{ padding: "7px 12px", letterSpacing: ".15em", fontWeight: 500 }}>{room.code}</span>
+          <span className="state-pill num" style={{ padding: "4px 10px", letterSpacing: ".15em", fontSize: 24, lineHeight: "24px" }}>{room.code}</span>
           <button className="btn" onClick={copy}><ICopy />{copied ? "已复制" : "复制邀请"}</button>
           {confirmLeave
             ? <><button className="btn danger" onClick={async () => { await app.leaveRoom(room.id); router.push("/rooms"); }}>确认退出</button><button className="btn ghost" onClick={() => setConfirmLeave(false)}>取消</button></>
@@ -64,9 +65,7 @@ export default function RoomPage() {
         </div>
       </div>
 
-      <div className="desks">
-        {members.map((p) => <Desk key={p.id} id={p.id} />)}
-      </div>
+      <StudyHall ids={room.memberIds} />
 
       <section className="card">
         <div className="cardhead"><h2>时差</h2><span className="hint">横轴是你的一天（{tzCity(viewerTz)}）</span></div>
@@ -94,55 +93,6 @@ export default function RoomPage() {
             ))}
           </div>
         </section>
-      </div>
-    </div>
-  );
-}
-
-function Desk({ id }: { id: UserId }) {
-  const app = useApp();
-  const p = app.profiles[id];
-  const l = app.live[id];
-  const now = app.now;
-  const isMe = id === app.me?.id;
-  const [sent, setSent] = useState<string | null>(null);
-  if (!p) return null;
-  const ms = liveFocusMs(l, now);
-  const left = l?.plannedEnd ? l.plannedEnd - now : null;
-  const h = partsIn(now, p.tz).h;
-  const today = app.sessions.filter((s) => s.userId === id && dayKey(s.startedAt, p.tz) === dayKey(now, p.tz)).reduce((a, s) => a + s.durationMs, 0) + ms;
-  const active = l?.state === "focus" || l?.state === "paused";
-  async function send(kind: "poke" | "invite") {
-    try {
-      if (kind === "poke") await app.sendSignal({ kind: "poke", to: id });
-      else await app.sendSignal({ kind: "invite", to: id, mode: "pomodoro", minutes: app.myProfile!.pomodoroMin, task: "" });
-      setSent(kind === "poke" ? "已戳" : "已邀请"); setTimeout(() => setSent(null), 2500);
-    } catch (e) { app.pushToast({ title: "没发出去", body: (e as Error).message }); }
-  }
-  return (
-    <div className={`card desk ${l?.state === "focus" ? "focus" : ""}`}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <Avatar p={p} size={40} live={l} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontWeight: 600, display: "flex", gap: 6, alignItems: "center" }}>{p.name}{isMe && <span className="muted" style={{ fontWeight: 400 }}>（你）</span>}{!isMe && app.online.has(id) && <span className="online-dot" />}</div>
-          <div className="muted" style={{ fontSize: 12 }}>{tzCity(p.tz)} {hhmm(now, p.tz)} · {phaseLabel[phaseAt(h)]}</div>
-        </div>
-        <StatePill l={l} />
-      </div>
-      <div className="t" style={{ color: active ? "var(--ink)" : "var(--ink-3)" }}>
-        {active ? (left != null && left > 0 ? clock(left) : clock(ms, true)) : l?.state === "break" && left ? clock(Math.max(0, left)) : "—"}
-      </div>
-      <div className="task">
-        {active ? <>{l!.subjectName && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(l!.subjectColor) }} />{l!.subjectName}</span>}{l!.task || "专注中"}</> : <span className="muted">{l?.state === "break" ? "休息一下" : "不在书桌前"}</span>}
-      </div>
-      <div className="foot">
-        <span>今日 {dur(today)}{isMe ? "" : ` · ${tzDiffLabel(p.tz, app.myProfile!.tz, now)}`}</span>
-        {!isMe && (sent ? <span>{sent} ✓</span> : (
-          <span style={{ display: "flex", gap: 2, margin: "-6px -6px -6px 0" }}>
-            <button className="iconbtn" title="戳一下" aria-label={`戳一下 ${p.name}`} onClick={() => send("poke")}><IHand /></button>
-            <button className="iconbtn" title="邀请一起专注" aria-label={`邀请 ${p.name} 一起专注`} onClick={() => send("invite")}><IUsers /></button>
-          </span>
-        ))}
       </div>
     </div>
   );

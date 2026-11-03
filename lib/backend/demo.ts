@@ -8,7 +8,7 @@ import { browserTz, DAY, MIN, partsIn, zonedToUtc } from "../time";
  * so their live status, history and replies look like the real thing.
  */
 
-const KEY = "tc-demo-v2";
+const KEY = "tc-demo-v3";
 const AUTH = "tc-demo-auth";
 const ME = "demo-me";
 
@@ -23,17 +23,17 @@ function rng(seed: number) {
 }
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-type Friend = { id: UserId; name: string; color: number; tz: string; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number };
+type Friend = { id: UserId; name: string; color: number; tz: string; look: { skin: number; hair: number; hairColor: number }; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number };
 
 function friendsFor(myTz: string): Friend[] {
   // pick friend zones that differ from the viewer's
   const far = myTz.startsWith("America") ? ["Asia/Shanghai", "Europe/London"] : myTz.startsWith("Europe") ? ["America/New_York", "Asia/Shanghai"] : ["America/New_York", "Europe/London"];
   return [
-    { id: "demo-lin", name: "林舟", color: 1, tz: far[0], goal: 300,
+    { id: "demo-lin", name: "林舟", color: 1, tz: far[0], goal: 300, look: { skin: 1, hair: 4, hairColor: 1 },
       blocks: [[9.5, 12], [14.5, 17.5], [20.5, 23.5]],
       subjects: [["算法", 2], ["GRE 词汇", 4], ["实验报告", 6]],
       tasks: { "算法": ["动态规划专题", "LeetCode 周赛复盘", "图论 最短路"], "GRE 词汇": ["再要你命 List 12", "填空 30 题"], "实验报告": ["数据清洗", "写讨论部分"] } },
-    { id: "demo-mia", name: "Mia", color: 2, tz: far[1], goal: 240,
+    { id: "demo-mia", name: "Mia", color: 2, tz: far[1], goal: 240, look: { skin: 0, hair: 2, hairColor: 2 },
       blocks: [[8, 10.5], [13, 15.5], [19, 21.5]],
       subjects: [["有机化学", 3], ["论文阅读", 7], ["法语", 5]],
       tasks: { "有机化学": ["第 9 章 亲核取代", "反应机理卡片"], "论文阅读": ["Attention 那篇精读", "综述 第 3 节"], "法语": ["听力 B2", "动词变位"] } },
@@ -78,8 +78,8 @@ function seed(): DB {
   const now = Date.now();
   const fr = friendsFor(myTz);
   const profiles: Profile[] = [
-    { id: ME, name: "我", color: 0, tz: myTz, dailyGoalMin: 240, pomodoroMin: 25, breakMin: 5 },
-    ...fr.map((f) => ({ id: f.id, name: f.name, color: f.color, tz: f.tz, dailyGoalMin: f.goal, pomodoroMin: 25, breakMin: 5 })),
+    { id: ME, name: "我", color: 0, tz: myTz, dailyGoalMin: 240, pomodoroMin: 25, breakMin: 5, look: { skin: 0, hair: 0, hairColor: 0 } },
+    ...fr.map((f) => ({ id: f.id, name: f.name, color: f.color, tz: f.tz, dailyGoalMin: f.goal, pomodoroMin: 25, breakMin: 5, look: f.look })),
   ];
   const subjects: Subject[] = [
     ...mySubjects.map(([n, c]) => ({ id: uid(), userId: ME, name: n, color: c, archived: false })),

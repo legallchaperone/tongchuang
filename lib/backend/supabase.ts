@@ -9,6 +9,7 @@ const iso = (v: number | null) => (v == null ? null : new Date(v).toISOString())
 const toProfile = (r: any): Profile => ({
   id: r.id, name: r.name || "", color: r.color ?? 0, tz: r.tz || "UTC",
   dailyGoalMin: r.daily_goal_min ?? 240, pomodoroMin: r.pomodoro_min ?? 25, breakMin: r.break_min ?? 5,
+  look: r.look && typeof r.look === "object" && "skin" in r.look ? r.look : null,
 });
 const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.name, color: r.color ?? 0, archived: !!r.archived });
 const toSession = (r: any): Session => ({
@@ -76,7 +77,7 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     async saveProfile(p) {
       check(await sb.from("profiles").upsert({
         id: p.id, name: p.name, color: p.color, tz: p.tz,
-        daily_goal_min: p.dailyGoalMin, pomodoro_min: p.pomodoroMin, break_min: p.breakMin,
+        daily_goal_min: p.dailyGoalMin, pomodoro_min: p.pomodoroMin, break_min: p.breakMin, look: p.look,
       }));
     },
 
