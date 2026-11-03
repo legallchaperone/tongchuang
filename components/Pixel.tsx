@@ -21,7 +21,7 @@ export const shirtOf = (p?: Profile | null) => SHIRTS[((p?.color ?? 0) % 8 + 8) 
 function seedOf(id: string) { let h = 7; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 
 /** a person's little room, drawn at native pixel size and scaled by whole numbers */
-export function DeskScene({ p, live, present, rain = false, maxScale = 6 }: { p: Profile; live?: LiveStatus; present: boolean; rain?: boolean; maxScale?: number }) {
+export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: { p: Profile; live?: LiveStatus; present: boolean; rain?: boolean; maxScale?: number; /** draw at this instant instead of now */ at?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(3);
@@ -38,12 +38,12 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6 }: { p:
   useEffect(() => {
     const c = ref.current; if (!c) return;
     const ctx = c.getContext("2d"); if (!ctx) return;
-    const t = partsIn(Date.now(), p.tz);
+    const t = partsIn(at ?? Date.now(), p.tz);
     drawScene(ctx, {
       look: lookOf(p), shirt: shirtOf(p), state: live?.state || "idle", hour: t.h + t.mi / 60, minute: t.mi, phase: phaseAt(t.h),
       frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present,
     });
-  }, [f, p, live?.state, present, rain, reduce]);
+  }, [f, p, live?.state, present, rain, reduce, at]);
 
   return (
     <div ref={wrap} className="scene-wrap">
