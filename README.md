@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
-![version](https://img.shields.io/badge/version-1.3.0-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.4.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -33,9 +33,13 @@
 
 ### 专注：三步完成一次有记录的专注
 
-写下要做的事 → 番茄钟或正计时（真实录音的环境声：雨、咖啡馆、壁炉、溪流、虫鸣、海浪、鸟鸣，可混合、可分别调音量；屏幕常亮，关掉页面不丢）→ 给专注度打分、写一句复盘。忘了点结束也没关系：时长可以改短，但不能改长。
+写下要做的事 → 选模式：番茄钟、心流（正计时，每满 25 分钟窗外亮一颗星，结束时建议休息多久）或倒计时（真实录音的环境声：雨、咖啡馆、壁炉、溪流、虫鸣、海浪、鸟鸣，可混合、可分别调音量；屏幕常亮，关掉页面不丢）→ 给专注度打分、写一句复盘。忘了点结束也没关系：时长可以改短，但不能改长。
 
 ![专注](docs/screenshots/focus.png)
+
+### 状态与收工：不在书桌前，也让同窗知道
+
+像微信状态一样挂一句“睡觉了”“上课中”“出去玩”，可以只挂 1 小时、到今晚 0 点或一直挂着；睡觉时书桌熄灯，小人趴在桌上。晚上点“收工”：回顾今天的时长和科目，给精力和收获打分，写下明天先做什么，第二天打开时会看到“昨天的你说”。
 
 ### 陪伴：不打扰，但彼此看得见
 
@@ -43,7 +47,9 @@
 
 ### 数据：越记越想记
 
-每日目标进度、连续天数、按科目分色的每日柱状图、一年的“庄稼长势”热力图、一天中最专注的时段、和同窗对比、自动小结。
+每日目标进度、连续天数、按科目分色的每日柱状图、一年的“庄稼长势”热力图、一天中最专注的时段、精力和收获的趋势、和同窗对比、自动小结。一年的热力图可以一键生成像素风长图分享出去。
+
+<p align="center"><img src="docs/screenshots/share-card.png" alt="分享热力图" width="360"></p>
 
 <table>
 <tr>
@@ -113,7 +119,8 @@ git push origin main --tags
 
 ```
 app/(main)/          今天、自习室、数据、设置（带侧边栏的页面）
-app/focus/           全屏专注
+app/focus/           全屏专注（番茄钟 / 心流 / 倒计时）
+app/wrap/            收工（每日总结）
 app/welcome/         新手引导
 app/release/         产品主页
 app/api/version/     当前部署的版本号（给更新提示用）
@@ -121,6 +128,10 @@ components/          书桌场景、像素图标、图表、引导和更新组�
 lib/backend/         数据层：supabase.ts（线上）与 demo.ts（演示），同一接口
 lib/pixel.ts         像素角色与房间的绘制
 lib/focus.tsx        计时引擎（刷新不丢，状态同步给同窗）
+lib/focusModes.ts    三种专注模式与建议休息时长
+lib/status.ts        个人状态（预设、有效期）
+lib/review.ts        收工的“工作日”与熄灯判断
+lib/shareCard.ts     分享图绘制
 lib/stats.ts         统计（按各自时区分日）
 lib/changelog.json   版本与更新日志（唯一来源）
 supabase/schema.sql  表结构、行级权限、实时订阅、记录只能改短的数据库约束
