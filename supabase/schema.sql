@@ -257,6 +257,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   begin alter publication supabase_realtime add table public.live_status; exception when others then null; end;
+end $$;
 
 -- ───────────── R-007 收工（每日总结） ─────────────
 -- one row per person per local day (day = the reviewer's own date key, not UTC)
