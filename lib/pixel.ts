@@ -212,6 +212,8 @@ export interface SceneOpts {
   seed: number;
   rain?: boolean;
   present: boolean; // has the app open
+  /** R-005: status says "sleeping": lights off, head down on the desk */
+  sleeping?: boolean;
 }
 
 export const SCENE_W = 96;
@@ -352,10 +354,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   rect(ctx, 85, 20, 1, 5, "#3f7d5c"); rect(ctx, 83, 21, 3, 2, "#5aa25a"); rect(ctx, 86, 19, 3, 2, "#5aa25a"); rect(ctx, 87, 22, 2, 2, "#4a9050");
 
   const seated = o.state === "focus" || o.state === "paused";
+  const slump = !!o.sleeping && !seated && o.state !== "break";
   const lampOn = seated;
   // chair back
   const chairC = C.wood;
-  if (!seated) {
+  if (!seated && !slump) {
     rect(ctx, 38, 36, 20, 2, C.woodDk); rect(ctx, 38, 38, 2, 12, C.woodDk); rect(ctx, 56, 38, 2, 12, C.woodDk);
     rect(ctx, 40, 38, 16, 9, chairC); rect(ctx, 41, 39, 14, 1, C.woodHi);
   } else {
@@ -367,6 +370,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink });
     const bob = o.state === "focus" && o.frame % 8 < 4 ? 0 : 1;
     drawGrid(ctx, g, 40, 32 + (o.state === "paused" ? 1 : bob));
+  }
+  if (slump) {
+    // head sunk onto the desk, eyes shut, slow breathing
+    const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink: true });
+    drawGrid(ctx, g, 40, 39 + (o.frame % 16 < 8 ? 0 : 1));
   }
 
   // desk
@@ -401,6 +409,13 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     rect(ctx, hx, 50, 3, 2, OUTLINE); rect(ctx, hx, 50, 2, 1, skin);
     rect(ctx, hx + 2, 47, 1, 3, "#e7b73e"); rect(ctx, hx + 2, 46, 1, 1, "#e98f8f");
   }
+  if (slump) {
+    // folded arms on the desk, the face resting on them
+    const sh = o.shirt;
+    rect(ctx, 37, 47, 22, 5, OUTLINE);
+    rect(ctx, 38, 48, 20, 3, sh); rect(ctx, 38, 50, 20, 1, shade(sh, -0.22));
+    rect(ctx, 38, 48, 3, 2, pick(SKINS, o.look.skin)); rect(ctx, 55, 48, 3, 2, pick(SKINS, o.look.skin));
+  }
   // lamp
   const lx = 70;
   rect(ctx, lx, 47, 8, 3, "#2f4a3a"); rect(ctx, lx + 3, 37, 2, 10, "#2f4a3a");
@@ -416,7 +431,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   }
 
   // lighting: their local time of day
-  const dim = o.phase === "night" ? 0.45 : o.phase === "dusk" || o.phase === "dawn" ? 0.14 : 0;
+  const dim = Math.max(o.phase === "night" ? 0.45 : o.phase === "dusk" || o.phase === "dawn" ? 0.14 : 0, slump ? 0.4 : 0);
   if (dim) { ctx.fillStyle = `rgba(14,16,44,${dim})`; ctx.fillRect(0, 0, SCENE_W, SCENE_H); }
   if (lampOn) {
     // stepped pool of lamp light: three rings, brightest under the shade
@@ -435,7 +450,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     }
     ctx.restore();
   }
-  if (!o.present && !seated && o.state !== "break" && o.phase === "night") {
+  if (slump || (!o.present && !seated && o.state !== "break" && o.phase === "night")) {
     // "Zzz" over the empty chair: they're probably asleep
     const z = "#c9d3ff";
     const zy = 26 - (o.frame % 12 < 6 ? 0 : 1);

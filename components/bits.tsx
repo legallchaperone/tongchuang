@@ -2,11 +2,20 @@
 import React from "react";
 import type { LiveStatus, Profile } from "@/lib/types";
 import { PixelAvatar } from "./Pixel";
+import { shownStatus } from "@/lib/status";
 
 export const seriesVar = (i: number | null | undefined) => `var(--s${((i ?? 0) % 8 + 8) % 8})`;
 
 export function Avatar(props: { p?: Profile | null; size?: number; live?: LiveStatus; showSky?: boolean }) {
-  return <PixelAvatar {...props} />;
+  // R-005: status icon as a corner badge (hidden while focusing)
+  const st = shownStatus(props.live);
+  if (!st) return <PixelAvatar {...props} />;
+  return (
+    <span className="pav-st" title={`${st.emoji} ${st.text}`}>
+      <PixelAvatar {...props} />
+      <span className="st-badge" aria-hidden="true">{st.emoji}</span>
+    </span>
+  );
 }
 
 /** segmented pixel gauge: 20 blocks around a square ring */

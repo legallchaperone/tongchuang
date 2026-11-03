@@ -22,6 +22,8 @@ const toLive = (r: any): LiveStatus => ({
   subjectColor: r.subject_color, mode: r.mode || "stopwatch", startedAt: ts(r.started_at),
   plannedEnd: ts(r.planned_end), accumulatedMs: Number(r.accumulated_ms || 0),
   runningSince: ts(r.running_since), updatedAt: ts(r.updated_at) || 0,
+  statusEmoji: r.status_emoji || null, statusText: r.status_text || null,
+  statusUntil: ts(r.status_until), statusSetAt: ts(r.status_set_at),
 });
 const toKudos = (r: any): Kudos => ({ id: r.id, sessionId: r.session_id, fromUser: r.from_user, emoji: r.emoji, createdAt: ts(r.created_at)! });
 
@@ -172,11 +174,19 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       return (check(await sb.from("live_status").select("*").in("user_id", userIds)) as any[]).map(toLive);
     },
     async setLive(l) {
-      check(await sb.from("live_status").upsert({
+      const row: any = {
         user_id: l.userId, state: l.state, task: l.task, subject_name: l.subjectName, subject_color: l.subjectColor,
         mode: l.mode, started_at: iso(l.startedAt), planned_end: iso(l.plannedEnd), accumulated_ms: Math.round(l.accumulatedMs),
         running_since: iso(l.runningSince), updated_at: new Date().toISOString(),
-      }));
+      };
+      // R-005: only touch the status columns when the caller says something about them
+      if (l.statusEmoji !== undefined) {
+        row.status_emoji = l.statusEmoji || null;
+        row.status_text = l.statusEmoji ? l.statusText || "" : null;
+        row.status_until = iso(l.statusEmoji ? l.statusUntil ?? null : null);
+        row.status_set_at = iso(l.statusEmoji ? l.statusSetAt ?? Date.now() : null);
+      }
+      check(await sb.from("live_status").upsert(row));
     },
 
     async listKudos(sessionIds) {

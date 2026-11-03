@@ -2,8 +2,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getBackend } from "./backend";
 import type { Backend } from "./backend/types";
-import type { AuthUser, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
+import type { AuthUser, Kudos, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
 import { browserTz, DAY } from "./time";
+import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 
 export interface Toast {
   id: string;
@@ -43,6 +44,8 @@ interface Ctx {
   updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId" | "durationMs" | "endedAt">>): Promise<void>;
   deleteSession(id: string): Promise<void>;
   setLive(l: LiveStatus): Promise<void>;
+  /** R-005: set or clear (null) my personal status */
+  setMyStatus(s: PersonalStatus | null): Promise<void>;
   toggleKudos(sessionId: string, emoji: string): Promise<void>;
   sendSignal(s: DistOmit<Signal, "from" | "at">): Promise<void>;
   signOut(): Promise<void>;
@@ -224,7 +227,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSessions((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     },
     async deleteSession(id) { await backend.deleteSession(id); setSessions((l) => l.filter((x) => x.id !== id)); },
-    async setLive(l) { setLiveMap((m) => ({ ...m, [l.userId]: l })); await backend.setLive(l); },
+    async setLive(l) {
+      const prev = liveRef.current[l.userId];
+      let out = l;
+      if (l.statusEmoji === undefined && prev) {
+        // R-005: starting a new focus block clears my status unless I asked to keep it
+        const starting = l.userId === me?.id && l.state === "focus" && prev.state !== "focus" && prev.state !== "paused";
+        const st = activeStatus(prev);
+        if (starting && st && !readStatusPrefs().keepOnFocus) {
+          out = { ...l, ...statusPatch(null) };
+          pushToast({ title: "开始专注，状态已清除", body: `${st.emoji} ${st.text}`.trim(), ttl: 3500 });
+        }
+      }
+      // writers that leave the status out keep the stored one
+      const keep = prev ? { statusEmoji: prev.statusEmoji, statusText: prev.statusText, statusUntil: prev.statusUntil, statusSetAt: prev.statusSetAt } : {};
+      const merged: LiveStatus = out.statusEmoji === undefined ? { ...out, ...keep } : out;
+      setLiveMap((m) => ({ ...m, [l.userId]: merged }));
+      await backend.setLive(out);
+    },
+    async setMyStatus(st) {
+      if (!me) return;
+      const cur: LiveStatus = liveRef.current[me.id] || { userId: me.id, state: "idle", task: "", subjectName: "", subjectColor: null, mode: "stopwatch", startedAt: null, plannedEnd: null, accumulatedMs: 0, runningSince: null, updatedAt: Date.now() };
+      const next: LiveStatus = { ...cur, ...statusPatch(st), updatedAt: Date.now() };
+      liveRef.current = { ...liveRef.current, [me.id]: next };
+      setLiveMap((m) => ({ ...m, [me.id]: next }));
+      await backend.setLive(next);
+    },
     async toggleKudos(sessionId, emoji) {
       if (!me) return;
       const has = kudos.find((k) => k.sessionId === sessionId && k.fromUser === me.id && k.emoji === emoji);

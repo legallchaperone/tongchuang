@@ -8,6 +8,8 @@ import type { Session, UserId } from "@/lib/types";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
 import { IHand, IUsers } from "./Icons";
 import { Avatar, seriesVar, StatePill } from "./bits";
+import { activeStatus, shownStatus } from "@/lib/status";
+import { StatusFeedItem, StatusLine, useStatusPrefs } from "./Status";
 
 /** one classmate row with live status and quick actions */
 export function PersonRow({ id }: { id: UserId }) {
@@ -26,6 +28,7 @@ export function PersonRow({ id }: { id: UserId }) {
   const left = l?.plannedEnd ? l.plannedEnd - now : null;
   const tz = p.tz;
   const todayMs = todayFocus(app.sessions, id, l, tz, now);
+  const st = shownStatus(l, now);
 
   async function signal(kind: "poke" | "invite") {
     try {
@@ -47,7 +50,7 @@ export function PersonRow({ id }: { id: UserId }) {
         <div className="what">
           {l?.state === "focus" || l?.state === "paused" ? (
             <>{l.subjectName && <span className="subj"><span className="dot" style={{ background: seriesVar(l.subjectColor) }} />{l.subjectName}</span>} {l.task || "专注中"}</>
-          ) : l?.state === "break" ? "休息一下" : l?.updatedAt ? `${ago(l.updatedAt, now)}活跃` : "还没开始"}
+          ) : l?.state === "break" ? "休息一下" : st ? <StatusLine s={st} mine={isMe} now={now} /> : l?.updatedAt ? `${ago(l.updatedAt, now)}活跃` : "还没开始"}
         </div>
         <div className="where">{tzCity(tz)} {hhmm(now, tz)} · {phaseLabel[phase]}{isMe ? "" : ` · ${tzDiffLabel(tz, app.myProfile.tz, now)}`}</div>
       </div>
@@ -158,23 +161,35 @@ export function FeedItem({ group }: { group: Session[] }) {
 
 export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: number }) {
   const app = useApp();
+  const prefs = useStatusPrefs();
   const tz = app.myProfile?.tz || "UTC";
   const groups = useMemo(() => {
     const set = new Set(userIds);
     return groupSessions(app.sessions.filter((s) => set.has(s.userId)).slice(0, limit * 4)).slice(0, limit);
   }, [app.sessions, userIds, limit]);
-  if (!groups.length) return <div className="empty"><b>还没有动态</b>完成一次专注，就会出现在这里。</div>;
+  // R-005: current statuses appear in the feed at the time they were set (only the current one is stored)
+  const statuses = prefs.showInFeed
+    ? userIds.map((id) => ({ id, s: activeStatus(app.live[id], app.now) })).filter((x): x is { id: UserId; s: NonNullable<typeof x.s> } => !!x.s)
+    : [];
+  const entries: { t: number; key: string; node: React.ReactNode }[] = [
+    ...groups.map((g) => ({ t: g[0].startedAt, key: g[0].id, node: <FeedItem key={g[0].id} group={g} /> })),
+    ...statuses.map(({ id, s }) => ({
+      t: s.setAt, key: "st-" + id,
+      node: <StatusFeedItem key={"st-" + id} p={app.profiles[id]} l={app.live[id]} isMine={id === app.me?.id} avatar={<Avatar p={app.profiles[id]} size={32} showSky={false} />} />,
+    })),
+  ].sort((a, b) => b.t - a.t);
+  if (!entries.length) return <div className="empty"><b>还没有动态</b>完成一次专注，就会出现在这里。</div>;
   const out: React.ReactNode[] = [];
   let last = "";
   const today = dayKey(app.now, tz);
-  for (const g of groups) {
-    const k = dayKey(g[0].startedAt, tz);
+  for (const e of entries) {
+    const k = dayKey(e.t, tz);
     if (k !== last) {
       const label = k === today ? "今天" : k === dayKey(app.now - 86400000, tz) ? "昨天" : Number(k.slice(5, 7)) + "月" + Number(k.slice(8)) + "日";
       out.push(<div className="daydiv" key={"d" + k}>{label}</div>);
       last = k;
     }
-    out.push(<FeedItem key={g[0].id} group={g} />);
+    out.push(e.node);
   }
   return <div className="feed">{out}</div>;
 }
