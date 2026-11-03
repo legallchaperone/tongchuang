@@ -9,6 +9,8 @@ import { DeskScene } from "./Pixel";
 import { livePrefix } from "@/lib/focusModes";
 import { seriesVar, StatePill } from "./bits";
 import { IHand, IUsers } from "./Icons";
+import { shownStatus } from "@/lib/status";
+import { SetStatusLink, StatusLine } from "./Status";
 
 /** one person's desk: their little room plus a name plate */
 export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolean }) {
@@ -26,6 +28,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
   const active = l?.state === "focus" || l?.state === "paused";
   const today = todayMs(app.sessions, id, l, p.tz, now);
   const present = app.online.has(id);
+  const st = shownStatus(l, now);
 
   async function send(kind: "poke" | "invite") {
     try {
@@ -50,7 +53,10 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
         <div className="what">
           {active
             ? <>{l!.subjectName && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(l!.subjectColor) }} />{l!.subjectName}</span>}{l!.task || "专注中"}</>
-            : l?.state === "break" ? "起来喝口水" : phaseAt(h) === "night" && !present ? "大概在睡觉" : "不在书桌前"}
+            : l?.state === "break" ? "起来喝口水"
+            : st ? <StatusLine s={st} mine={isMe} now={now} />
+            : isMe ? <SetStatusLink />
+            : phaseAt(h) === "night" && !present ? "大概在睡觉" : "不在书桌前"}
         </div>
         <div className="foot">
           <span>{tzCity(p.tz)} {hhmm(now, p.tz)}{isMe ? "" : ` · ${tzDiffLabel(p.tz, app.myProfile.tz, now)}`} · 今日 {dur(today)}</span>

@@ -655,3 +655,86 @@ table tr + tr { border-top: 2px dashed var(--slot) !important; }
 .breaktable th, .breaktable td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 2px dashed var(--slot); font-weight: 400; }
 .breaktable th { color: var(--ink-3); }
 /* ---- R-001 专注模式 end ---- */
+
+/* ---- R-005 个人状态 ---- */
+/* bubble over the desk scene */
+.scene-box { position: relative; flex: none; }
+.st-bubble {
+  position: absolute; display: grid; place-items: center; pointer-events: none;
+  width: calc(var(--sc) * 13px); height: calc(var(--sc) * 11px); font-size: calc(var(--sc) * 6.5px); line-height: 1;
+  background: #fbf4e2; box-shadow: 0 0 0 calc(var(--sc) * 1px) #3a2016;
+  animation: st-float 1.6s steps(1) infinite;
+}
+/* the tail: stepped pixels pointing down-left at the chair */
+.st-bubble::after {
+  content: ""; position: absolute; left: calc(var(--sc) * 2px); bottom: calc(var(--sc) * -2px);
+  width: calc(var(--sc) * 2px); height: calc(var(--sc) * 2px); background: inherit;
+  box-shadow: calc(var(--sc) * -1px) calc(var(--sc) * 1px) 0 0 #3a2016, calc(var(--sc) * 1px) 0 0 0 #3a2016, 0 calc(var(--sc) * 1px) 0 0 #3a2016;
+}
+.st-bubble.sleep { background: #d9defc; }
+@keyframes st-float { 50% { transform: translateY(calc(var(--sc) * -1px)); } }
+
+/* name plate / person row line */
+.st-line { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; min-width: 0; color: var(--ink); font: inherit; line-height: inherit; vertical-align: bottom; }
+.st-line .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-line .ago { color: var(--ink-3); white-space: nowrap; flex: none; }
+.st-line .e { flex: none; }
+button.st-line { border: 0; background: none; padding: 0; cursor: pointer; text-align: left; }
+button.st-line:hover .t { text-decoration: underline dashed; text-underline-offset: 3px; }
+button.st-line.add { color: var(--ink-3); }
+.st-line .e.plus, .st-btn .e.plus { display: inline-grid; place-items: center; width: 14px; height: 14px; background: var(--slot); color: var(--ink-2); box-shadow: 0 0 0 1px var(--edge); line-height: 1; align-self: center; }
+
+/* avatar corner badge */
+.pav-st { position: relative; display: inline-block; flex: none; line-height: 0; }
+.st-badge {
+  position: absolute; right: -4px; bottom: -4px; width: 15px; height: 15px; display: grid; place-items: center;
+  font-size: 10px; line-height: 1; background: var(--panel); box-shadow: 0 0 0 2px var(--edge);
+}
+
+/* triggers */
+.st-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; font: inherit; cursor: pointer; }
+.st-btn .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-btn.st-chip {
+  height: 32px; padding: 0 10px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink-2);
+  clip-path: var(--notch); box-shadow: inset 0 -3px 0 var(--panel-2);
+}
+.st-btn.st-chip.on { background: var(--lamp-soft); color: var(--ink); box-shadow: inset 0 -3px 0 var(--lamp); }
+.st-btn.st-chip .u { color: var(--ink-3); white-space: nowrap; }
+.st-btn.st-chip:hover { filter: brightness(1.04); }
+.st-btn.st-rail { border: 0; background: rgba(0,0,0,.14); color: var(--on-wood); padding: 6px 10px; clip-path: var(--notch); text-align: left; }
+.st-btn.st-rail:hover { background: rgba(0,0,0,.24); }
+.st-btn.st-rail:not(.on) { opacity: .85; }
+
+/* the sheet */
+.st-sheet { width: min(460px, 100%); }
+.st-head { display: flex; justify-content: space-between; align-items: center; }
+.st-head h2 { padding: 2px 10px; background: var(--wood); color: var(--on-wood); box-shadow: 0 0 0 2px var(--edge), inset 0 2px 0 var(--wood-hi); font-weight: 400; font-size: inherit; margin: 0; }
+.st-preview { display: flex; gap: 12px; align-items: flex-end; }
+.st-big { width: 56px; height: 56px; flex: none; display: grid; place-items: center; font-size: 30px; line-height: 1; background: var(--panel); box-shadow: 0 0 0 2px var(--edge), inset 0 -4px 0 var(--panel-2); }
+.st-big.empty { color: var(--ink-3); font-size: 24px; background: var(--slot); }
+.st-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.st-tile {
+  display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink-2);
+  font: inherit; clip-path: var(--notch); box-shadow: inset 0 -3px 0 var(--panel-2); cursor: pointer;
+}
+.st-tile .e { font-size: 16px; line-height: 1; }
+.st-tile[aria-pressed="true"], .st-em[aria-pressed="true"] { background: var(--lamp-soft); color: var(--ink); box-shadow: inset 0 -3px 0 var(--lamp); }
+.st-more { display: flex; flex-direction: column; gap: 6px; }
+.st-emojis { display: flex; flex-wrap: wrap; gap: 4px; }
+.st-em { width: 32px; height: 32px; display: grid; place-items: center; font-size: 16px; line-height: 1; border: 2px solid var(--edge); background: var(--panel); clip-path: var(--notch); cursor: pointer; padding: 0; }
+.input.st-custom { width: 64px; height: 32px; text-align: center; }
+.st-seg { display: flex; }
+.st-seg button { flex: 1; }
+.st-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* feed entry */
+.st-fi .st-say { color: var(--ink); background: var(--panel); padding: 0 6px; box-shadow: 0 0 0 2px var(--edge); display: inline-flex; gap: 6px; overflow-wrap: anywhere; }
+.st-fi .meta { margin-top: 6px; }
+
+/* pixel checkbox (settings) */
+.check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.check input { appearance: none; -webkit-appearance: none; margin: 0; width: 18px; height: 18px; flex: none; background: var(--panel); box-shadow: 0 0 0 2px var(--edge), inset 0 -3px 0 var(--panel-2); cursor: pointer; display: grid; place-items: center; }
+.check input:checked { background: var(--btn); box-shadow: 0 0 0 2px var(--edge), inset 0 -3px 0 var(--btn-dk); }
+.check input:checked::after { content: ""; width: 8px; height: 4px; border-left: 3px solid var(--btn-ink); border-bottom: 3px solid var(--btn-ink); transform: translateY(-2px) rotate(-45deg); }
+@media (max-width: 560px) { .st-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); } .st-tile { padding: 0 4px; gap: 4px; justify-content: center; } }
+/* ---- /R-005 个人状态 ---- */

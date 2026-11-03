@@ -23,7 +23,9 @@ function rng(seed: number) {
 }
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-type Friend = { id: UserId; name: string; color: number; tz: string; look: { skin: number; hair: number; hairColor: number }; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number; /** studies in flow mode (R-001) */ flow?: boolean };
+type Friend = { id: UserId; name: string; color: number; tz: string; look: { skin: number; hair: number; hairColor: number }; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number; /** studies in flow mode (R-001) */ flow?: boolean;
+  /** R-005: personal statuses outside study blocks, [from, to, emoji, text] in local hours (from > to wraps past midnight) */
+  statuses: [number, number, string, string][] };
 
 function friendsFor(myTz: string): Friend[] {
   // pick friend zones that differ from the viewer's
@@ -31,10 +33,12 @@ function friendsFor(myTz: string): Friend[] {
   return [
     { id: "demo-lin", name: "林舟", color: 1, tz: far[0], goal: 300, flow: true, look: { skin: 1, hair: 4, hairColor: 1 },
       blocks: [[9.5, 12], [14.5, 17.5], [20.5, 23.5]],
+      statuses: [[23.75, 8.5, "😴", "睡觉了"], [12, 13.25, "🍜", "食堂干饭"], [18, 19.5, "🎮", "打球去了"]],
       subjects: [["算法", 2], ["GRE 词汇", 4], ["实验报告", 6]],
       tasks: { "算法": ["动态规划专题", "LeetCode 周赛复盘", "图论 最短路"], "GRE 词汇": ["再要你命 List 12", "填空 30 题"], "实验报告": ["数据清洗", "写讨论部分"] } },
     { id: "demo-mia", name: "Mia", color: 2, tz: far[1], goal: 240, look: { skin: 0, hair: 2, hairColor: 2 },
       blocks: [[8, 10.5], [13, 15.5], [19, 21.5]],
+      statuses: [[22.5, 7.5, "😴", "睡觉了"], [10.75, 12.5, "🏫", "在上课"], [16, 16.75, "🚇", "在路上"], [17.5, 18.5, "🍜", "做饭中"]],
       subjects: [["有机化学", 3], ["论文阅读", 7], ["法语", 5]],
       tasks: { "有机化学": ["第 9 章 亲核取代", "反应机理卡片"], "论文阅读": ["Attention 那篇精读", "综述 第 3 节"], "法语": ["听力 B2", "动词变位"] } },
   ];
@@ -129,6 +133,25 @@ export function createDemoBackend(): Backend {
   /** an accepted invite overrides the schedule for a while */
   const holdUntil = new Map<UserId, number>();
 
+  /** which of a classmate's status windows covers now, with its local start and end as instants */
+  function friendStatus(f: Friend, now: number) {
+    const p = partsIn(now, f.tz);
+    const h = p.h + p.mi / 60;
+    const at = (dayOffset: number, hour: number) => {
+      const d = new Date(Date.UTC(p.y, p.mo - 1, p.d + dayOffset, 12));
+      return zonedToUtc(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), Math.floor(hour), Math.round((hour % 1) * 60), f.tz);
+    };
+    for (const [a, b, emoji, text] of f.statuses) {
+      const wraps = a > b;
+      const inside = wraps ? h >= a || h < b : h >= a && h < b;
+      if (!inside) continue;
+      const setAt = wraps && h < b ? at(-1, a) : at(0, a);
+      const until = wraps && h >= a ? at(1, b) : at(0, b);
+      return { statusEmoji: emoji, statusText: text, statusUntil: until, statusSetAt: setAt };
+    }
+    return null;
+  }
+
   /** simulated classmates: derive their state from their local clock */
   function simulate() {
     const now = Date.now();
@@ -175,6 +198,12 @@ export function createDemoBackend(): Backend {
           db.sessions.push(x); emitSession(x, "upsert");
         }
         Object.assign(cur, { state: "idle", task: "", subjectName: "", subjectColor: null, startedAt: null, plannedEnd: null, runningSince: null, accumulatedMs: 0, updatedAt: now });
+        emitLive(cur);
+      }
+      // R-005: a status outside study blocks (sleeping, lunch, class...)
+      const st = block ? null : friendStatus(f, now);
+      if ((cur.statusEmoji || null) !== (st?.statusEmoji || null) || (cur.statusSetAt || null) !== (st?.statusSetAt || null)) {
+        Object.assign(cur, st || { statusEmoji: null, statusText: null, statusUntil: null, statusSetAt: null });
         emitLive(cur);
       }
     }
@@ -281,8 +310,12 @@ export function createDemoBackend(): Backend {
     getLive: async (ids) => delay(db.live.filter((l) => ids.includes(l.userId)).map((l) => ({ ...l }))),
     async setLive(l) {
       const i = db.live.findIndex((x) => x.userId === l.userId);
-      if (i >= 0) db.live[i] = l; else db.live.push(l);
-      save(); emitLive(l);
+      // R-005: a write without status fields keeps the stored status
+      const next: LiveStatus = l.statusEmoji === undefined && i >= 0
+        ? { ...l, statusEmoji: db.live[i].statusEmoji ?? null, statusText: db.live[i].statusText ?? null, statusUntil: db.live[i].statusUntil ?? null, statusSetAt: db.live[i].statusSetAt ?? null }
+        : { ...l };
+      if (i >= 0) db.live[i] = next; else db.live.push(next);
+      save(); emitLive({ ...next });
     },
     listKudos: async (ids) => delay(db.kudos.filter((k) => ids.includes(k.sessionId))),
     async addKudos(sessionId, emoji) {

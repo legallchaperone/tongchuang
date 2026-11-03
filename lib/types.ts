@@ -75,6 +75,22 @@ export interface LiveStatus {
   /** when the current running stretch started (null while paused) */
   runningSince: number | null;
   updatedAt: number;
+  /* R-005 personal status. Optional: writers that leave them out (e.g. the focus mirror) keep whatever is stored. */
+  /** status icon, null = no status */
+  statusEmoji?: string | null;
+  /** short text, up to 20 characters */
+  statusText?: string | null;
+  /** when it expires (epoch ms); null = until cleared by hand */
+  statusUntil?: number | null;
+  /** when it was set, for "3 小时前" and the feed */
+  statusSetAt?: number | null;
+}
+
+/** what the status sheet saves */
+export interface PersonalStatus {
+  emoji: string;
+  text: string;
+  until: number | null;
 }
 
 export interface Room {

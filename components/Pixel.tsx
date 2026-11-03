@@ -4,6 +4,7 @@ import type { LiveStatus, Profile } from "@/lib/types";
 import { defaultLook, drawScene, pick, portrait, SCENE_H, SCENE_W, SHIRTS, type AvatarLook } from "@/lib/pixel";
 import { partsIn, phaseAt } from "@/lib/time";
 import { liveFocusMs } from "@/lib/stats";
+import { isSleep, shownStatus } from "@/lib/status";
 
 /* one shared animation clock (~6 fps) */
 let frame = 0;
@@ -28,6 +29,9 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: 
   const [scale, setScale] = useState(3);
   const f = useFrame();
   const reduce = useMemo(() => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches, []);
+  // R-005: a status shows as a bubble by the desk; focus wins over it
+  const st = shownStatus(live, at ?? Date.now());
+  const sleeping = isSleep(st);
 
   useEffect(() => {
     const el = wrap.current; if (!el) return;
@@ -42,15 +46,23 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: 
     const t = partsIn(at ?? Date.now(), p.tz);
     drawScene(ctx, {
       look: lookOf(p), shirt: shirtOf(p), state: live?.state || "idle", hour: t.h + t.mi / 60, minute: t.mi, phase: phaseAt(t.h),
-      frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present,
+      frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present, sleeping,
       flowMs: live && live.mode === "stopwatch" ? liveFocusMs(live, at ?? Date.now()) : 0,
     });
-  }, [f, p, live, present, rain, reduce, at]);
+  }, [f, p, live, present, rain, reduce, at, sleeping]);
 
   return (
     <div ref={wrap} className="scene-wrap">
-      <canvas ref={ref} width={SCENE_W} height={SCENE_H} className="scene" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}
-        role="img" aria-label={`${p.name}的书桌：${live?.state === "focus" ? (live.mode === "stopwatch" ? "心流中" : "正在专注") : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : "不在座位"}`} />
+      <div className="scene-box" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}>
+        <canvas ref={ref} width={SCENE_W} height={SCENE_H} className="scene" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}
+          role="img" aria-label={`${p.name}的书桌：${live?.state === "focus" ? (live.mode === "stopwatch" ? "心流中" : "正在专注") : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : st ? `${st.emoji} ${st.text}` : "不在座位"}`} />
+        {st && (
+          <span className={`st-bubble ${sleeping ? "sleep" : ""}`} aria-hidden="true"
+            style={{ left: (sleeping ? 60 : 44) * scale, top: (sleeping ? 18 : 12) * scale, ["--sc" as string]: scale } as React.CSSProperties}>
+            {st.emoji}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -13,6 +13,8 @@ import { CharacterEditor } from "@/components/CharacterEditor";
 import { NumberField } from "@/components/NumberField";
 import Link from "next/link";
 import { APP_VERSION, BUILD_ID, CHANGELOG } from "@/lib/version";
+import { writeStatusPrefs } from "@/lib/status";
+import { StatusButton, useStatusPrefs } from "@/components/Status";
 
 export default function SettingsPage() {
   const app = useApp();
@@ -28,6 +30,7 @@ export default function SettingsPage() {
   const setFp = (patch: Partial<FocusPrefs>) => setP({ ...p, focusPrefs: { ...fp, ...patch } });
   const mine = app.subjects.filter((s) => s.userId === app.me!.id);
   const tzs = Array.from(new Set([browserTz(), p.tz, ...COMMON_TZS]));
+  const stPrefs = useStatusPrefs();
 
   async function save() {
     try { await app.saveProfile({ ...p, name: p.name.trim() || "同学" }); setSaved(true); setTimeout(() => setSaved(false), 2000); }
@@ -141,6 +144,21 @@ export default function SettingsPage() {
           <button className="btn sm" type="submit" disabled={!newSubj.trim()}>添加</button>
         </form>
         {subjSheet && <SubjectSheet subject={subjSheet.s} kind={subjSheet.kind} onClose={() => setSubjSheet(null)} />}
+      </section>
+
+      <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <h2>状态</h2>
+        <p className="muted">不在书桌前的时候，告诉同窗你在干嘛。状态会显示在你的书桌、名牌和头像上。</p>
+        <div><StatusButton /></div>
+        <label className="check">
+          <input type="checkbox" checked={!stPrefs.keepOnFocus} onChange={(e) => writeStatusPrefs({ ...stPrefs, keepOnFocus: !e.target.checked })} />
+          <span>开始专注时自动清除状态</span>
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={stPrefs.showInFeed} onChange={(e) => writeStatusPrefs({ ...stPrefs, showInFeed: e.target.checked })} />
+          <span>在动态里显示状态</span>
+        </label>
+        <span className="muted" style={{ fontSize: 12 }}>这两项只对当前这台设备生效。</span>
       </section>
 
       <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>

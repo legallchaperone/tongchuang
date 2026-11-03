@@ -241,3 +241,20 @@ grant execute on function public.merge_subject(uuid, uuid) to authenticated;
 alter table public.sessions drop constraint if exists sessions_mode_check;
 alter table public.sessions add constraint sessions_mode_check check (mode in ('stopwatch','pomodoro','countdown'));
 alter table public.profiles add column if not exists focus_prefs jsonb;
+
+-- ───────────── R-005 个人状态 ─────────────
+-- A short status ("😴 睡觉了") on the existing live_status row. Only the current status is stored;
+-- the app hides it once status_until has passed (null = until cleared by hand).
+-- Reads/writes are covered by the existing "live read" / "live write own" policies,
+-- and live_status is already in the supabase_realtime publication. Safe to run again.
+alter table public.live_status add column if not exists status_emoji text;
+alter table public.live_status add column if not exists status_text text;
+alter table public.live_status add column if not exists status_until timestamptz;
+alter table public.live_status add column if not exists status_set_at timestamptz;
+do $$ begin
+  alter table public.live_status add constraint live_status_status_len
+    check (char_length(status_emoji) <= 16 and char_length(status_text) <= 20);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  begin alter publication supabase_realtime add table public.live_status; exception when others then null; end;
+end $$;
