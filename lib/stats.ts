@@ -1,5 +1,5 @@
 import type { LiveStatus, Session, Subject, UserId } from "./types";
-import { addDaysKey, DAY, dayKey, HOUR, lastDays, partsIn, startOfDay } from "./time";
+import { addDaysKey, DAY, dayKey, HOUR, lastDays, partsIn, startOfDay, zonedToUtc } from "./time";
 
 /** focused ms of a live status right now */
 export function liveFocusMs(l: LiveStatus | undefined, now = Date.now()) {
@@ -17,10 +17,49 @@ export function withLive(sessions: Session[], userId: UserId, l: LiveStatus | un
   return mine;
 }
 
+/**
+ * Focused time of one session per local day. A session that runs past midnight is split
+ * in proportion to the wall-clock time on each side (pauses are spread evenly).
+ */
+export function dayShares(s: Session, tz: string): [string, number][] {
+  const k0 = dayKey(s.startedAt, tz);
+  const end = Math.max(s.startedAt, s.endedAt);
+  if (dayKey(Math.max(s.startedAt, end - 1), tz) === k0) return [[k0, s.durationMs]];
+  const span = end - s.startedAt;
+  const out: [string, number][] = [];
+  let t = s.startedAt;
+  for (let guard = 0; t < end && guard < 400; guard++) {
+    const k = dayKey(t, tz);
+    const [y, mo, d] = addDaysKey(k, 1).split("-").map(Number);
+    const next = Math.min(end, zonedToUtc(y, mo, d, 0, 0, tz));
+    if (next <= t) break;
+    out.push([k, (s.durationMs * (next - t)) / span]);
+    t = next;
+  }
+  return out;
+}
+
+/** focused ms that falls on a given local day */
+export function msOnDay(sessions: Session[], tz: string, key: string) {
+  let ms = 0;
+  for (const s of sessions) for (const [k, v] of dayShares(s, tz)) if (k === key) ms += v;
+  return ms;
+}
+
+/** one person's focused time today in their own time zone, the running session included */
+export function todayMs(all: Session[], userId: UserId, live: LiveStatus | undefined, tz: string, now = Date.now()) {
+  return msOnDay(withLive(all, userId, live, tz, now), tz, dayKey(now, tz));
+}
+
 export function byDay(sessions: Session[], tz: string) {
   const m = new Map<string, number>();
-  for (const s of sessions) { const k = dayKey(s.startedAt, tz); m.set(k, (m.get(k) || 0) + s.durationMs); }
+  for (const s of sessions) for (const [k, v] of dayShares(s, tz)) m.set(k, (m.get(k) || 0) + v);
   return m;
+}
+
+/** sessions with any focused time on one of these days */
+export function touching(sessions: Session[], tz: string, keys: Set<string>) {
+  return sessions.filter((s) => dayShares(s, tz).some(([k]) => keys.has(k)));
 }
 
 export function streaks(daily: Map<string, number>, tz: string, now = Date.now(), minMs = 15 * 60_000) {
@@ -40,9 +79,9 @@ export interface Summary {
 }
 export function summarize(sessions: Session[], tz: string, keys: string[], goalMs: number): Summary {
   const set = new Set(keys);
-  const inRange = sessions.filter((s) => set.has(dayKey(s.startedAt, tz)));
-  const daily = byDay(inRange, tz);
-  const totalMs = inRange.reduce((a, s) => a + s.durationMs, 0);
+  const inRange = touching(sessions, tz, set);
+  const daily = new Map(Array.from(byDay(inRange, tz)).filter(([k]) => set.has(k)));
+  const totalMs = Array.from(daily.values()).reduce((a, v) => a + v, 0);
   const rated = inRange.filter((s) => s.rating != null);
   return {
     totalMs, days: keys.length, activeDays: daily.size, sessions: inRange.filter((s) => s.id !== "live").length,
@@ -57,11 +96,11 @@ export function summarize(sessions: Session[], tz: string, keys: string[], goalM
 export function dailyBySubject(sessions: Session[], tz: string, keys: string[]) {
   const idx = new Map(keys.map((k, i) => [k, i]));
   const rows = keys.map((k) => ({ key: k, total: 0, parts: new Map<string | null, number>() }));
-  for (const s of sessions) {
-    const i = idx.get(dayKey(s.startedAt, tz));
+  for (const s of sessions) for (const [k, v] of dayShares(s, tz)) {
+    const i = idx.get(k);
     if (i == null) continue;
-    rows[i].total += s.durationMs;
-    rows[i].parts.set(s.subjectId, (rows[i].parts.get(s.subjectId) || 0) + s.durationMs);
+    rows[i].total += v;
+    rows[i].parts.set(s.subjectId, (rows[i].parts.get(s.subjectId) || 0) + v);
   }
   return rows;
 }

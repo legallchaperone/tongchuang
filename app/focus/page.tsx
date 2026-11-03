@@ -10,7 +10,7 @@ import { DeskScene } from "@/components/Pixel";
 import { StartPanel } from "@/components/StartPanel";
 import { IBack, IExpand, IPause, IPlay, IStop } from "@/components/Icons";
 import { SoundMixer } from "@/components/SoundMixer";
-import { liveFocusMs } from "@/lib/stats";
+import { liveFocusMs, todayMs as todayFocusMs } from "@/lib/stats";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity } from "@/lib/time";
 import type { FocusMode } from "@/lib/types";
 
@@ -57,7 +57,7 @@ function Focus() {
   const inviter = invite?.withUser ? app.profiles[invite.withUser] : null;
 
   const others = app.peopleIds.filter((id) => id !== app.me?.id && (app.live[id]?.state === "focus" || app.live[id]?.state === "break"));
-  const todayMs = app.sessions.filter((x) => x.userId === app.me?.id && dayKey(x.startedAt, prof.tz) === dayKey(now, prof.tz)).reduce((a, x) => a + x.durationMs, 0);
+  const todayMs = todayFocusMs(app.sessions, app.me!.id, undefined, prof.tz, now);
 
   const planned = s?.plannedMs || 0;
   const el = focus.elapsed;

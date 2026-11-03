@@ -3,6 +3,7 @@ import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
+import { msOnDay } from "@/lib/stats";
 import { dur, dayKey, MIN } from "@/lib/time";
 import { IClose } from "./Icons";
 import { seriesVar } from "./bits";
@@ -49,7 +50,7 @@ export function ReflectionSheet() {
   if (!p || !app.myProfile) return null;
   const tz = app.myProfile.tz;
   const today = dayKey(Date.now(), tz);
-  const before = app.sessions.filter((s) => s.userId === app.me?.id && dayKey(s.startedAt, tz) === today).reduce((a, s) => a + s.durationMs, 0);
+  const before = msOnDay(app.sessions.filter((s) => s.userId === app.me?.id), tz, today);
   const goal = app.myProfile.dailyGoalMin * MIN;
   const maxMins = Math.max(1, Math.floor(p.durationMs / 60000));
   const chosen = Math.min(maxMins, Math.max(1, mins || 1)) * MIN;

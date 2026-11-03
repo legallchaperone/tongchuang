@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
-import { liveFocusMs } from "@/lib/stats";
+import { liveFocusMs, todayMs } from "@/lib/stats";
 import type { UserId } from "@/lib/types";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity, tzDiffLabel } from "@/lib/time";
 import { DeskScene } from "./Pixel";
@@ -23,7 +23,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
   const left = l?.plannedEnd ? l.plannedEnd - now : null;
   const h = partsIn(now, p.tz).h;
   const active = l?.state === "focus" || l?.state === "paused";
-  const today = app.sessions.filter((s) => s.userId === id && dayKey(s.startedAt, p.tz) === dayKey(now, p.tz)).reduce((a, s) => a + s.durationMs, 0) + ms;
+  const today = todayMs(app.sessions, id, l, p.tz, now);
   const present = app.online.has(id);
 
   async function send(kind: "poke" | "invite") {

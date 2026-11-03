@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
-import { byDay, dailyBySubject, hourProfile, streaks, subjectTotals, summarize, withLive, yearGrid } from "@/lib/stats";
+import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, summarize, touching, withLive, yearGrid } from "@/lib/stats";
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, HBars, Heatmap, HourChart } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
@@ -35,7 +35,7 @@ export default function StatsPage() {
   const keys = useMemo(() => lastDays(range, tz, now), [range, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
   const prevKeys = useMemo(() => keys.map((k) => addDaysKey(k, -range)), [keys, range]);
   const keySet = useMemo(() => new Set(keys), [keys]);
-  const inRange = useMemo(() => all.filter((s) => keySet.has(dayKey(s.startedAt, tz))), [all, keySet, tz]);
+  const inRange = useMemo(() => touching(all, tz, keySet), [all, keySet, tz]);
   const cur = summarize(all, tz, keys, goal);
   const prev = summarize(all, tz, prevKeys, goal);
   const daily = useMemo(() => byDay(all, tz), [all, tz]);
@@ -59,7 +59,7 @@ export default function StatsPage() {
       }
     }
     const wdTot = new Array(7).fill(0);
-    inRange.forEach((s) => { wdTot[weekdayOfKey(dayKey(s.startedAt, tz))] += s.durationMs; });
+    inRange.forEach((s) => dayShares(s, tz).forEach(([k, v]) => { if (keySet.has(k)) wdTot[weekdayOfKey(k)] += v; }));
     if (range >= 30 && cur.totalMs > 0) {
       const mx = wdTot.indexOf(Math.max(...wdTot)), mn = wdTot.indexOf(Math.min(...wdTot));
       out.push(<p key="w">周{weekdayCn[mx]}学得最多，周{weekdayCn[mn]}最少。</p>);
@@ -73,7 +73,7 @@ export default function StatsPage() {
   const compare = useMemo(() => app.peopleIds.map((id) => {
     const pp = app.profiles[id]; if (!pp) return null;
     const ks = new Set(lastDays(range, pp.tz, now));
-    const ms = withLive(app.sessions, id, app.live[id], pp.tz, now).filter((s) => ks.has(dayKey(s.startedAt, pp.tz))).reduce((a, s) => a + s.durationMs, 0);
+    const ms = Array.from(byDay(withLive(app.sessions, id, app.live[id], pp.tz, now), pp.tz)).filter(([k]) => ks.has(k)).reduce((a, [, v]) => a + v, 0);
     return { key: id, label: <><span className="dot" style={{ background: seriesVar(pp.color) }} />{pp.name}</>, ms, color: seriesVar(pp.color) };
   }).filter(Boolean).sort((a, b) => b!.ms - a!.ms) as { key: string; label: React.ReactNode; ms: number; color: string }[], [app.peopleIds, app.profiles, app.sessions, app.live, range, minute]); // eslint-disable-line react-hooks/exhaustive-deps
 

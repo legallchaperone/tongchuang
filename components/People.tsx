@@ -3,7 +3,7 @@ import Link from "next/link";
 import React, { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
-import { liveFocusMs } from "@/lib/stats";
+import { liveFocusMs, todayMs as todayFocus } from "@/lib/stats";
 import type { Session, UserId } from "@/lib/types";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
 import { IHand, IUsers } from "./Icons";
@@ -25,7 +25,7 @@ export function PersonRow({ id }: { id: UserId }) {
   const focusMs = liveFocusMs(l, now);
   const left = l?.plannedEnd ? l.plannedEnd - now : null;
   const tz = p.tz;
-  const todayMs = app.sessions.filter((s) => s.userId === id && dayKey(s.startedAt, tz) === dayKey(now, tz)).reduce((a, s) => a + s.durationMs, 0) + focusMs;
+  const todayMs = todayFocus(app.sessions, id, l, tz, now);
 
   async function signal(kind: "poke" | "invite") {
     try {
