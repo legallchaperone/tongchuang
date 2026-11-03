@@ -118,3 +118,22 @@ export interface AuthUser {
   id: UserId;
   email: string | null;
 }
+
+/** R-007 收工: one person's end-of-day review, one per local day */
+export interface DailyReview {
+  userId: UserId;
+  /** the reviewer's local date key, YYYY-MM-DD */
+  day: string;
+  /** 1 tired · 2 okay · 3 full, null if skipped */
+  energy: number | null;
+  /** 1–4 how much today got done, null if skipped */
+  impact: number | null;
+  /** “明天先做什么” */
+  note: string;
+  /** focused time that day, snapshot at review time */
+  totalMs: number;
+  tz: string;
+  createdAt: number;
+  /** last time it was saved: the desk goes dark from here until the next focus */
+  updatedAt: number;
+}

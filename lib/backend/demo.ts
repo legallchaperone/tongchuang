@@ -1,6 +1,8 @@
 import type { Backend } from "./types";
-import type { AuthUser, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
-import { browserTz, DAY, MIN, partsIn, zonedToUtc } from "../time";
+import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import { browserTz, DAY, dayKey, MIN, partsIn, zonedToUtc } from "../time";
+import { msOnDay } from "../stats";
+import { workDay } from "../review";
 
 /**
  * Demo backend: everything lives in this browser (localStorage).
@@ -15,6 +17,8 @@ const ME = "demo-me";
 type DB = {
   profiles: Profile[]; subjects: Subject[]; rooms: Room[]; sessions: Session[];
   live: LiveStatus[]; kudos: Kudos[]; seededAt: number;
+  /** R-007; added lazily to older demo data */
+  reviews?: DailyReview[];
 };
 
 function rng(seed: number) {
@@ -113,10 +117,51 @@ function seed(): DB {
   return { profiles, subjects, rooms: [room], sessions, live, kudos, seededAt: now };
 }
 
+/* ── R-007 收工: past reviews for everyone, built from the sessions already there ── */
+const TOMORROW = ["先把{t}做完", "继续{t}", "早点起，先{t}", "{t}，然后休息", "上午先搞定{t}"];
+function makeReview(r: () => number, p: Profile, day: string, sessions: Session[], subjects: Subject[], tasks: string[]): DailyReview | null {
+  const mine = sessions.filter((s) => s.userId === p.id);
+  const total = msOnDay(mine, p.tz, day);
+  if (total < 20 * MIN) return null;
+  const last = mine.filter((s) => dayKey(s.startedAt, p.tz) === day).reduce((a, s) => Math.max(a, s.endedAt), 0);
+  const at = last + (10 + r() * 40) * MIN;
+  const ratio = total / (p.dailyGoalMin * MIN);
+  const impact = Math.max(1, Math.min(4, Math.round(ratio * 2.6 + (r() - 0.5) * 1.6)));
+  const energy = Math.max(1, Math.min(3, Math.round(1.9 + (r() - 0.5) * 2 + (ratio > 1.2 ? -0.4 : 0.2))));
+  const t = tasks[Math.floor(r() * tasks.length)] || subjects[0]?.name || "复习";
+  const note = r() < 0.8 ? TOMORROW[Math.floor(r() * TOMORROW.length)].replace("{t}", t) : "";
+  return { userId: p.id, day, energy, impact, note, totalMs: Math.round(total), tz: p.tz, createdAt: at, updatedAt: at };
+}
+function tasksOf(userId: UserId, myTz: string) {
+  const f = friendsFor(myTz).find((x) => x.id === userId);
+  return Object.values(f ? f.tasks : myTasks).flat();
+}
+function seedReviews(db: DB): DailyReview[] {
+  const out: DailyReview[] = [];
+  const now = Date.now();
+  const myTz = db.profiles.find((p) => p.id === ME)?.tz || browserTz();
+  for (const p of db.profiles) {
+    const r = rng(4242 + p.id.length * 31);
+    const cur = workDay(now, p.tz);
+    const days = new Set(db.sessions.filter((s) => s.userId === p.id && s.startedAt > now - 120 * DAY).map((s) => dayKey(s.startedAt, p.tz)));
+    const yesterday = workDay(now - DAY, p.tz);
+    for (const day of Array.from(days).sort()) {
+      if (day >= cur) continue; // today is still open
+      const always = p.id === ME && day === yesterday; // so “昨天的你说” shows up in the demo
+      if (!always && r() > 0.72) continue;
+      const rv = makeReview(r, p, day, db.sessions, db.subjects.filter((s) => s.userId === p.id), tasksOf(p.id, myTz));
+      if (rv && always && !rv.note) rv.note = "先把 SVD 的证明写完";
+      if (rv) out.push(rv);
+    }
+  }
+  return out;
+}
+
 export function createDemoBackend(): Backend {
   let db: DB;
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* full */ } };
+  if (!db.reviews) db.reviews = seedReviews(db);
   save();
   const fr = () => db.profiles.filter((p) => p.id !== ME);
   const friendDef = () => friendsFor(db.profiles.find((p) => p.id === ME)!.tz);
@@ -129,6 +174,8 @@ export function createDemoBackend(): Backend {
   const emitLive = (l: LiveStatus) => subs.forEach((s) => s.ids.has(l.userId) && s.h.onLive(l));
   const emitSession = (x: Session, k: "upsert" | "delete") => subs.forEach((s) => s.ids.has(x.userId) && s.h.onSession(x, k));
   const emitKudos = (k: Kudos, kind: "insert" | "delete") => subs.forEach((s) => s.h.onKudos(k, kind));
+  const reviewSubs = new Set<{ ids: Set<UserId>; cb: (r: DailyReview) => void }>();
+  const emitReview = (r: DailyReview) => reviewSubs.forEach((s) => s.ids.has(r.userId) && s.cb(r));
 
   /** an accepted invite overrides the schedule for a while */
   const holdUntil = new Map<UserId, number>();
@@ -205,6 +252,16 @@ export function createDemoBackend(): Backend {
       if ((cur.statusEmoji || null) !== (st?.statusEmoji || null) || (cur.statusSetAt || null) !== (st?.statusSetAt || null)) {
         Object.assign(cur, st || { statusEmoji: null, statusText: null, statusUntil: null, statusSetAt: null });
         emitLive(cur);
+      }
+      // R-007: done for the day after the last block → 收工
+      const lastEnd = f.blocks[f.blocks.length - 1][1];
+      if (!block && (h >= lastEnd + 0.2 || h < 5)) {
+        const wd = workDay(now, f.tz);
+        const prof = db.profiles.find((x) => x.id === f.id);
+        if (prof && !db.reviews!.some((x) => x.userId === f.id && x.day === wd)) {
+          const rv = makeReview(rng(p.d * 7 + f.id.length), prof, wd, db.sessions, fsubs, Object.values(f.tasks).flat());
+          if (rv) { rv.createdAt = rv.updatedAt = now; db.reviews!.push(rv); emitReview(rv); }
+        }
       }
     }
     save();
@@ -328,6 +385,17 @@ export function createDemoBackend(): Backend {
       if (!k) return;
       db.kudos = db.kudos.filter((x) => x !== k); save(); emitKudos(k, "delete");
     },
+    // R-007 收工
+    listReviews: async (ids, sinceDay) => delay(db.reviews!.filter((r) => ids.includes(r.userId) && r.day >= sinceDay).map((r) => ({ ...r }))),
+    async saveReview(r) {
+      const now = Date.now();
+      const old = db.reviews!.find((x) => x.userId === r.userId && x.day === r.day);
+      const full: DailyReview = { ...r, createdAt: old?.createdAt ?? now, updatedAt: now };
+      db.reviews = [...db.reviews!.filter((x) => x !== old), full];
+      save(); emitReview(full);
+      return full;
+    },
+    subscribeReviews(ids, cb) { const s = { ids: new Set(ids), cb }; reviewSubs.add(s); return () => { reviewSubs.delete(s); }; },
     subscribe(ids, h) { const s = { ids: new Set(ids), h }; subs.add(s); return () => subs.delete(s); },
     presence(meId, _rooms, onOnline) {
       const tick = () => {

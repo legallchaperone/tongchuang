@@ -257,4 +257,30 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   begin alter publication supabase_realtime add table public.live_status; exception when others then null; end;
+
+-- ───────────── R-007 收工（每日总结） ─────────────
+-- one row per person per local day (day = the reviewer's own date key, not UTC)
+create table if not exists public.daily_reviews (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day date not null,
+  energy smallint check (energy between 1 and 3),
+  impact smallint check (impact between 1 and 4),
+  note text not null default '' check (char_length(note) <= 140),
+  total_ms bigint not null default 0 check (total_ms >= 0),
+  tz text not null default 'UTC',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, day)
+);
+create index if not exists daily_reviews_day_idx on public.daily_reviews(day desc);
+
+alter table public.daily_reviews enable row level security;
+drop policy if exists "reviews read" on public.daily_reviews;
+create policy "reviews read" on public.daily_reviews for select using (public.shares_room(auth.uid(), user_id));
+drop policy if exists "reviews write own" on public.daily_reviews;
+create policy "reviews write own" on public.daily_reviews for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+alter table public.daily_reviews replica identity full;
+do $$ begin
+  begin alter publication supabase_realtime add table public.daily_reviews; exception when others then null; end;
 end $$;

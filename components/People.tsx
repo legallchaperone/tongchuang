@@ -5,7 +5,7 @@ import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { liveFocusMs, todayMs as todayFocus } from "@/lib/stats";
 import { livePrefix } from "@/lib/focusModes";
-import type { Session, UserId } from "@/lib/types";
+import type { DailyReview, Session, UserId } from "@/lib/types";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
 import { IHand, IUsers } from "./Icons";
 import { Avatar, seriesVar, StatePill } from "./bits";
@@ -160,6 +160,30 @@ export function FeedItem({ group }: { group: Session[] }) {
   );
 }
 
+/** R-007: “小陈收工了 · 今天 4小时12分” */
+export function ReviewFeedItem({ r }: { r: DailyReview }) {
+  const app = useApp();
+  const p = app.profiles[r.userId];
+  const isMine = r.userId === app.me?.id;
+  const viewerTz = app.myProfile?.tz || r.tz;
+  return (
+    <div className="fi fi-wrap">
+      <Avatar p={p} size={32} showSky={false} />
+      <div style={{ minWidth: 0 }}>
+        <div className="line1">
+          <b>{isMine ? "我" : p?.name || "同窗"}</b><span className="muted">收工了 · 今天</span><span className="d">{dur(r.totalMs)}</span>
+          <span className="wrap-moon" aria-hidden="true" />
+        </div>
+        {r.note && <div className="note">明天先：{r.note}</div>}
+        <div className="meta">
+          <span className="num">{hhmm(r.updatedAt, viewerTz)}</span>
+          {r.tz !== viewerTz && <span>{p?.name || "对方"}当地 <span className="num">{hhmm(r.updatedAt, r.tz)}</span></span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: number }) {
   const app = useApp();
   const prefs = useStatusPrefs();
@@ -172,12 +196,19 @@ export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: numbe
   const statuses = prefs.showInFeed
     ? userIds.map((id) => ({ id, s: activeStatus(app.live[id], app.now) })).filter((x): x is { id: UserId; s: NonNullable<typeof x.s> } => !!x.s)
     : [];
+  // R-007: 收工 entries, merged into the stream by time
+  const reviews = useMemo(() => {
+    const set = new Set(userIds);
+    const oldest = groups.length >= limit ? groups[groups.length - 1][0].startedAt : app.now - 14 * 86400000;
+    return app.reviews.filter((r) => set.has(r.userId) && r.updatedAt >= oldest);
+  }, [app.reviews, userIds, groups, limit]); // eslint-disable-line react-hooks/exhaustive-deps
   const entries: { t: number; key: string; node: React.ReactNode }[] = [
     ...groups.map((g) => ({ t: g[0].startedAt, key: g[0].id, node: <FeedItem key={g[0].id} group={g} /> })),
     ...statuses.map(({ id, s }) => ({
       t: s.setAt, key: "st-" + id,
       node: <StatusFeedItem key={"st-" + id} p={app.profiles[id]} l={app.live[id]} isMine={id === app.me?.id} avatar={<Avatar p={app.profiles[id]} size={32} showSky={false} />} />,
     })),
+    ...reviews.map((r) => ({ t: r.updatedAt, key: "r" + r.userId + r.day, node: <ReviewFeedItem key={"r" + r.userId + r.day} r={r} /> })),
   ].sort((a, b) => b.t - a.t);
   if (!entries.length) return <div className="empty"><b>还没有动态</b>完成一次专注，就会出现在这里。</div>;
   const out: React.ReactNode[] = [];

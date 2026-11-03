@@ -1,4 +1,4 @@
-import type { AuthUser, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -63,6 +63,12 @@ export interface Backend {
 
   /** presence across all my rooms: who has the app open */
   presence(me: UserId, roomIds: string[], onOnline: (ids: Set<UserId>) => void): Unsub;
+
+  // R-007 收工 (daily reviews)
+  listReviews(userIds: UserId[], sinceDay: string): Promise<DailyReview[]>;
+  /** insert or replace my review for that day */
+  saveReview(r: Omit<DailyReview, "createdAt" | "updatedAt">): Promise<DailyReview>;
+  subscribeReviews(userIds: UserId[], cb: (r: DailyReview) => void): Unsub;
 
   /** direct signals: poke / cheer / invite */
   sendSignal(s: Signal): Promise<void>;
