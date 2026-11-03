@@ -195,7 +195,7 @@ export function Landing() {
             <span className="lp-num">2</span>
             <b>全屏专注</b>
             <div className="inset lp-mock lp-timer"><span className="num">18:42</span><div className="progressbar" style={{ flex: 1 }}><div style={{ width: "26%" }} /></div></div>
-            <p>可以开雨声、棕噪音、海浪，屏幕常亮。刷新或关掉页面，计时也不会丢。</p>
+            <p>环境声是真实录音：雨、咖啡馆、壁炉、溪流、虫鸣、海浪、鸟鸣，可以混着开、各自调音量。屏幕常亮，关掉页面计时也不会丢。</p>
           </li>
           <li className="card pad">
             <span className="lp-num">3</span>

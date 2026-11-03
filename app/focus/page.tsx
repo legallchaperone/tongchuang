@@ -9,7 +9,7 @@ import { Spinner, seriesVar } from "@/components/bits";
 import { DeskScene } from "@/components/Pixel";
 import { StartPanel } from "@/components/StartPanel";
 import { IBack, IExpand, IPause, IPlay, IStop } from "@/components/Icons";
-import { Ambient, ambientLabel, setAmbient } from "@/lib/sound";
+import { SoundMixer } from "@/components/SoundMixer";
 import { liveFocusMs } from "@/lib/stats";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity } from "@/lib/time";
 import type { FocusMode } from "@/lib/types";
@@ -37,9 +37,8 @@ function Focus() {
   const ready = useAuthGate();
   const router = useRouter();
   const q = useSearchParams();
-  const [ambient, setAmb] = useState<Ambient>("off");
+  const [rain, setRain] = useState(false);
 
-  useEffect(() => () => setAmbient("off"), []);
   // keep the screen awake while a timer runs
   useEffect(() => {
     if (!focus.state?.runningSince || !("wakeLock" in navigator)) return;
@@ -66,7 +65,6 @@ function Focus() {
   const progress = s ? (planned ? Math.min(1, el / planned) : (el % 3600000) / 3600000) : 0;
   const subj = s?.subjectId ? app.subjects.find((x) => x.id === s.subjectId) : null;
 
-  function pickAmbient(a: Ambient) { setAmb(a); setAmbient(a, 0.45); }
   function fullscreen() { document.documentElement.requestFullscreen?.().catch(() => {}); }
 
   const me = app.me!.id;
@@ -75,9 +73,7 @@ function Focus() {
       {phase === "night" && <Stars />}
       <div className="focus-top">
         <Link href="/"><IBack /> 返回</Link>
-        <div className="ambient" role="group" aria-label="环境声">
-          {(["off", "rain", "brown", "waves"] as Ambient[]).map((a) => <button key={a} aria-pressed={ambient === a} onClick={() => pickAmbient(a)}>{ambientLabel[a]}</button>)}
-        </div>
+        <SoundMixer onChange={(m) => setRain(!m.muted && (m.levels.rain || 0) > 0)} />
         <button className="f" onClick={fullscreen} aria-label="全屏"><IExpand /></button>
       </div>
 
@@ -90,7 +86,7 @@ function Focus() {
         ) : (
           <>
             <div className="focus-stage">
-              <DeskScene p={prof} live={app.live[me]} present rain={ambient === "rain"} maxScale={5} />
+              <DeskScene p={prof} live={app.live[me]} present rain={rain} maxScale={5} />
               <div className="card timerplate">
                 <div>
                   <div className="phase">

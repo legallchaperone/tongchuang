@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md)
 
-![version](https://img.shields.io/badge/version-1.0.0-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.1.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -33,7 +33,7 @@
 
 ### 专注：三步完成一次有记录的专注
 
-写下要做的事 → 番茄钟或正计时（雨声、棕噪音、海浪，屏幕常亮，关掉页面不丢）→ 给专注度打分、写一句复盘。忘了点结束也没关系：时长可以改短，但不能改长。
+写下要做的事 → 番茄钟或正计时（真实录音的环境声：雨、咖啡馆、壁炉、溪流、虫鸣、海浪、鸟鸣，可混合、可分别调音量；屏幕常亮，关掉页面不丢）→ 给专注度打分、写一句复盘。忘了点结束也没关系：时长可以改短，但不能改长。
 
 ![专注](docs/screenshots/focus.png)
 
@@ -130,6 +130,8 @@ scripts/changelog.mjs 生成与校验 CHANGELOG.md
 
 只有和你在同一个自习室的人能看到你的资料、状态和记录；每个人只能修改自己的数据，且已保存的记录只能把时长改短。权限由数据库的行级安全策略保证，不依赖前端。
 
-## 美术与字体
+## 美术、字体与声音
 
-角色、房间、图标都是为本项目原创绘制的像素画，没有使用任何游戏素材。字体为 Fusion Pixel Font，遵循 SIL Open Font License 1.1，许可证见 `public/fonts/fusion12/OFL.txt`。
+- 角色、房间、图标都是为本项目原创绘制的像素画，没有使用任何游戏素材。
+- 字体为 Fusion Pixel Font，遵循 SIL Open Font License 1.1，许可证见 `public/fonts/fusion12/OFL.txt`。
+- 环境声为公有领域、CC0 与 CC BY 4.0 的真实录音（经 Blanket 项目整理），作者署名见 [`public/sounds/CREDITS.md`](public/sounds/CREDITS.md)，专注页的“音源署名”里也能看到。
