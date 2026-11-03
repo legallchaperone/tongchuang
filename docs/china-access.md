@@ -2,9 +2,29 @@
 
 同窗的数据存在 Supabase。网页会直接访问 `你的项目.supabase.co`，这个域名从中国大陆访问时快时慢，有时打不开。下面两步做完后：注册不用点邮件里的链接；网站所有的数据请求都改走你自己的域名。
 
-## 第一步：邮件改成验证码（约 3 分钟）
+## 第一步：邮件改成验证码
 
-Supabase 后台 → **Authentication** → **Emails**（有的版本叫 Email Templates）。
+Supabase 用自带的邮件服务时不允许修改模板，默认模板里只有确认链接，没有验证码。所以先二选一：
+
+**A. 最简单：关掉邮箱确认（1 分钟）**
+Authentication → Sign In / Providers → Email → 关掉 **Confirm email**。注册后不发邮件，直接进入新手引导；代价是不验证邮箱真假，朋友之间用问题不大。之前卡在未验证状态的账号：在 Authentication → Users 里删掉，让对方重新注册。
+
+**B. 推荐：接入自己的发信服务（10–15 分钟，免费）**
+以 [Resend](https://resend.com)（免费每月 3000 封）为例：
+
+1. Resend → Domains → 添加 `cwx.world`，把它给出的 DNS 记录加到 Cloudflare（都设为 **DNS only**），等待显示 Verified。
+2. Resend → API Keys → 新建一个 key。
+3. Supabase → Authentication → Emails → **Set up SMTP**：
+   - Host `smtp.resend.com`，Port `465`
+   - Username `resend`，Password 填刚才的 API key
+   - Sender email `noreply@cwx.world`，Sender name `同窗`
+4. 保存后就能编辑模板了，按下面的内容修改，并确认 **Confirm email** 是打开的。
+
+接入自己的发信服务后，也不再受 Supabase 自带邮件服务的限制（只保证发给项目团队成员、每小时数量很少）。
+
+### 邮件模板
+
+Supabase 后台 → **Authentication** → **Emails**。
 
 **Confirm signup**（注册确认）
 

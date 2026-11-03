@@ -146,7 +146,7 @@ function Login() {
                 </div>
               )}
               <button className="btn primary lg" disabled={busy} type="submit">{busy ? "请稍候…" : demo ? "进入演示" : mode === "in" ? "登录" : mode === "up" ? "注册" : "发送验证码"}</button>
-              {!demo && mode === "up" && <p className="muted" style={{ fontSize: 12 }}>注册后会收到一封带验证码的邮件，在这个页面输入就行，不用开 VPN 点链接。</p>}
+              {!demo && mode === "up" && <p className="muted" style={{ fontSize: 12 }}>如果需要验证邮箱，会收到一封带验证码的邮件，在这个页面输入就行。</p>}
             </>
           )}
           {msg && <p style={{ color: msg.ok ? "var(--good)" : "var(--bad)" }}>{msg.text}</p>}
