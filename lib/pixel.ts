@@ -212,6 +212,8 @@ export interface SceneOpts {
   seed: number;
   rain?: boolean;
   present: boolean; // has the app open
+  /** R-007: they 收工'd for the day — lights out until they focus again */
+  closed?: boolean;
 }
 
 export const SCENE_W = 96;
@@ -435,6 +437,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     }
     ctx.restore();
   }
+  if (o.closed && !seated && o.state !== "break") drawClosed(ctx, o);
   if (!o.present && !seated && o.state !== "break" && o.phase === "night") {
     // "Zzz" over the empty chair: they're probably asleep
     const z = "#c9d3ff";
@@ -442,6 +445,23 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     rect(ctx, 46, zy, 3, 1, z); rect(ctx, 47, zy + 1, 1, 1, z); rect(ctx, 46, zy + 2, 3, 1, z);
     rect(ctx, 50, zy - 4, 4, 1, z); rect(ctx, 52, zy - 3, 1, 1, z); rect(ctx, 51, zy - 2, 1, 1, z); rect(ctx, 50, zy - 1, 4, 1, z);
   }
+}
+
+/** R-007 收工: notebook shut, a little moon sign on the chair, and the room goes dark */
+function drawClosed(ctx: CanvasRenderingContext2D, o: SceneOpts) {
+  // closed notebook with the pencil laid on top
+  const cover = shade(o.shirt, -0.2);
+  rect(ctx, 40, 50, 16, 4, cover); rect(ctx, 40, 50, 16, 1, shade(cover, 0.25)); rect(ctx, 40, 53, 16, 1, shade(cover, -0.3));
+  rect(ctx, 41, 51, 1, 2, C.paper);
+  rect(ctx, 44, 52, 9, 1, "#e7b73e"); rect(ctx, 53, 52, 1, 1, "#e98f8f");
+  // sign hung on the chair back: a crescent moon
+  rect(ctx, 47, 36, 1, 3, C.woodDk); rect(ctx, 48, 35, 1, 1, C.woodDk); rect(ctx, 49, 36, 1, 3, C.woodDk);
+  rect(ctx, 43, 39, 11, 7, C.woodDk); rect(ctx, 44, 40, 9, 5, C.paper);
+  rect(ctx, 47, 41, 3, 1, "#d9a443"); rect(ctx, 46, 42, 2, 2, "#d9a443"); rect(ctx, 47, 44, 3, 1, "#d9a443");
+  // lights out
+  const k = o.phase === "night" ? 0.38 : o.phase === "day" ? 0.5 : 0.44;
+  ctx.fillStyle = `rgba(8,10,30,${k})`;
+  ctx.fillRect(0, 0, SCENE_W, SCENE_H);
 }
 
 /** a head-and-shoulders portrait grid for avatars */

@@ -4,7 +4,7 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { liveFocusMs, todayMs as todayFocus } from "@/lib/stats";
-import type { Session, UserId } from "@/lib/types";
+import type { DailyReview, Session, UserId } from "@/lib/types";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
 import { IHand, IUsers } from "./Icons";
 import { Avatar, seriesVar, StatePill } from "./bits";
@@ -156,6 +156,30 @@ export function FeedItem({ group }: { group: Session[] }) {
   );
 }
 
+/** R-007: “小陈收工了 · 今天 4小时12分” */
+export function ReviewFeedItem({ r }: { r: DailyReview }) {
+  const app = useApp();
+  const p = app.profiles[r.userId];
+  const isMine = r.userId === app.me?.id;
+  const viewerTz = app.myProfile?.tz || r.tz;
+  return (
+    <div className="fi fi-wrap">
+      <Avatar p={p} size={32} showSky={false} />
+      <div style={{ minWidth: 0 }}>
+        <div className="line1">
+          <b>{isMine ? "我" : p?.name || "同窗"}</b><span className="muted">收工了 · 今天</span><span className="d">{dur(r.totalMs)}</span>
+          <span className="wrap-moon" aria-hidden="true" />
+        </div>
+        {r.note && <div className="note">明天先：{r.note}</div>}
+        <div className="meta">
+          <span className="num">{hhmm(r.updatedAt, viewerTz)}</span>
+          {r.tz !== viewerTz && <span>{p?.name || "对方"}当地 <span className="num">{hhmm(r.updatedAt, r.tz)}</span></span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: number }) {
   const app = useApp();
   const tz = app.myProfile?.tz || "UTC";
@@ -163,18 +187,35 @@ export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: numbe
     const set = new Set(userIds);
     return groupSessions(app.sessions.filter((s) => set.has(s.userId)).slice(0, limit * 4)).slice(0, limit);
   }, [app.sessions, userIds, limit]);
-  if (!groups.length) return <div className="empty"><b>还没有动态</b>完成一次专注，就会出现在这里。</div>;
+  // R-007: 收工 entries, merged into the stream by time
+  const reviews = useMemo(() => {
+    const set = new Set(userIds);
+    const oldest = groups.length >= limit ? groups[groups.length - 1][0].startedAt : app.now - 14 * 86400000;
+    return app.reviews.filter((r) => set.has(r.userId) && r.updatedAt >= oldest).sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [app.reviews, userIds, groups, limit]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!groups.length && !reviews.length) return <div className="empty"><b>还没有动态</b>完成一次专注，就会出现在这里。</div>;
   const out: React.ReactNode[] = [];
   let last = "";
   const today = dayKey(app.now, tz);
-  for (const g of groups) {
-    const k = dayKey(g[0].startedAt, tz);
-    if (k !== last) {
-      const label = k === today ? "今天" : k === dayKey(app.now - 86400000, tz) ? "昨天" : Number(k.slice(5, 7)) + "月" + Number(k.slice(8)) + "日";
-      out.push(<div className="daydiv" key={"d" + k}>{label}</div>);
-      last = k;
+  const divider = (t: number) => {
+    const k = dayKey(t, tz);
+    if (k === last) return;
+    const label = k === today ? "今天" : k === dayKey(app.now - 86400000, tz) ? "昨天" : Number(k.slice(5, 7)) + "月" + Number(k.slice(8)) + "日";
+    out.push(<div className="daydiv" key={"d" + k}>{label}</div>);
+    last = k;
+  };
+  let ri = 0;
+  const flushReviews = (after: number) => {
+    for (; ri < reviews.length && reviews[ri].updatedAt >= after; ri++) {
+      divider(reviews[ri].updatedAt);
+      out.push(<ReviewFeedItem key={"r" + reviews[ri].userId + reviews[ri].day} r={reviews[ri]} />);
     }
+  };
+  for (const g of groups) {
+    flushReviews(g[0].endedAt);
+    divider(g[0].startedAt);
     out.push(<FeedItem key={g[0].id} group={g} />);
   }
+  flushReviews(-Infinity);
   return <div className="feed">{out}</div>;
 }

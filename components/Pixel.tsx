@@ -21,7 +21,7 @@ export const shirtOf = (p?: Profile | null) => pick(SHIRTS, p?.color);
 function seedOf(id: string) { let h = 7; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 
 /** a person's little room, drawn at native pixel size and scaled by whole numbers */
-export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: { p: Profile; live?: LiveStatus; present: boolean; rain?: boolean; maxScale?: number; /** draw at this instant instead of now */ at?: number }) {
+export function DeskScene({ p, live, present, rain = false, maxScale = 6, at, closed = false }: { p: Profile; live?: LiveStatus; present: boolean; rain?: boolean; maxScale?: number; /** draw at this instant instead of now */ at?: number; /** R-007: 收工, lights out */ closed?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(3);
@@ -41,14 +41,14 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: 
     const t = partsIn(at ?? Date.now(), p.tz);
     drawScene(ctx, {
       look: lookOf(p), shirt: shirtOf(p), state: live?.state || "idle", hour: t.h + t.mi / 60, minute: t.mi, phase: phaseAt(t.h),
-      frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present,
+      frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present, closed,
     });
-  }, [f, p, live?.state, present, rain, reduce, at]);
+  }, [f, p, live?.state, present, rain, reduce, at, closed]);
 
   return (
     <div ref={wrap} className="scene-wrap">
       <canvas ref={ref} width={SCENE_W} height={SCENE_H} className="scene" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}
-        role="img" aria-label={`${p.name}的书桌：${live?.state === "focus" ? "正在专注" : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : "不在座位"}`} />
+        role="img" aria-label={`${p.name}的书桌：${closed ? "已收工，熄灯了" : live?.state === "focus" ? "正在专注" : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : "不在座位"}`} />
     </div>
   );
 }

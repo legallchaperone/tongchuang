@@ -11,6 +11,7 @@ import { Feed } from "@/components/People";
 import { StudyHall } from "@/components/Hall";
 import { DailyBars, foldSlices, PixelDonut } from "@/components/Charts";
 import { IPlay } from "@/components/Icons";
+import { WrapButton, YesterdayNote } from "@/components/Wrap";
 
 function greeting(h: number) {
   if (h < 5) return "夜深了";
@@ -55,11 +56,13 @@ export default function TodayPage() {
 
   return (
     <div className="page">
+      <YesterdayNote />
       <div className="pagehead">
         <div>
           <h1>{greeting(p.h)}，{prof.name}</h1>
           <p className="sub">{p.mo}月{p.d}日 星期{weekdayCn[p.wd]} · {focusingNow.length ? `${focusingNow.map((id) => app.profiles[id]?.name).join("、")} 正在专注` : others.length ? "同窗们现在都不在书桌前" : "邀请朋友加入，一起学"}</p>
         </div>
+        <WrapButton />
       </div>
 
       <section>

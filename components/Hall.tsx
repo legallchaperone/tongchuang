@@ -6,6 +6,7 @@ import { liveFocusMs, todayMs } from "@/lib/stats";
 import type { UserId } from "@/lib/types";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity, tzDiffLabel } from "@/lib/time";
 import { DeskScene } from "./Pixel";
+import { closedReview } from "@/lib/review";
 import { seriesVar, StatePill } from "./bits";
 import { IHand, IUsers } from "./Icons";
 
@@ -25,6 +26,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
   const active = l?.state === "focus" || l?.state === "paused";
   const today = todayMs(app.sessions, id, l, p.tz, now);
   const present = app.online.has(id);
+  const closed = closedReview(app.reviews, app.sessions, l, id, p.tz, now);
 
   async function send(kind: "poke" | "invite") {
     try {
@@ -36,7 +38,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
 
   return (
     <div className="card deskcard">
-      <DeskScene p={p} live={l} present={present} maxScale={compact ? 3 : 5} />
+      <DeskScene p={p} live={l} present={present} maxScale={compact ? 3 : 5} closed={!!closed} />
       <div className="plate">
         <div className="nm">
           <b>{p.name}{isMe ? "（你）" : ""}</b>
@@ -49,7 +51,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
         <div className="what">
           {active
             ? <>{l!.subjectName && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(l!.subjectColor) }} />{l!.subjectName}</span>}{l!.task || "专注中"}</>
-            : l?.state === "break" ? "起来喝口水" : phaseAt(h) === "night" && !present ? "大概在睡觉" : "不在书桌前"}
+            : l?.state === "break" ? "起来喝口水" : closed ? `收工了 · 今天 ${dur(closed.totalMs)}` : phaseAt(h) === "night" && !present ? "大概在睡觉" : "不在书桌前"}
         </div>
         <div className="foot">
           <span>{tzCity(p.tz)} {hhmm(now, p.tz)}{isMe ? "" : ` · ${tzDiffLabel(p.tz, app.myProfile.tz, now)}`} · 今日 {dur(today)}</span>

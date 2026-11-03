@@ -5,6 +5,7 @@ import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, 
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
+import { ReviewTrend } from "@/components/Wrap";
 import type { Session, UserId } from "@/lib/types";
 
 const RANGES = [7, 30, 90, 365] as const;
@@ -127,6 +128,11 @@ export default function StatsPage() {
           <div className="cardbody insight">{insights.length ? insights : <p>这段时间还没有记录。</p>}</div>
         </section>
       </div>
+
+      <section className="card">
+        <div className="cardhead"><h2>精力和收获{range > 90 ? "（近 90 天）" : ""}</h2><span className="hint">收工时打的分 · 每格一档</span></div>
+        <div className="cardbody"><ReviewTrend userId={p.id} keys={range > 90 ? lastDays(90, tz, now) : keys} daily={daily} isMe={isMe} name={p.name} /></div>
+      </section>
 
       <div className="grid-2">
         <section className="card">

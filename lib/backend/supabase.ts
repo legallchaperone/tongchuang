@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ts = (v: any) => (v ? new Date(v).getTime() : null);
@@ -24,6 +24,11 @@ const toLive = (r: any): LiveStatus => ({
   runningSince: ts(r.running_since), updatedAt: ts(r.updated_at) || 0,
 });
 const toKudos = (r: any): Kudos => ({ id: r.id, sessionId: r.session_id, fromUser: r.from_user, emoji: r.emoji, createdAt: ts(r.created_at)! });
+
+const toReview = (r: any): DailyReview => ({
+  userId: r.user_id, day: String(r.day).slice(0, 10), energy: r.energy ?? null, impact: r.impact ?? null, note: r.note || "",
+  totalMs: Number(r.total_ms || 0), tz: r.tz || "UTC", createdAt: ts(r.created_at) || 0, updatedAt: ts(r.updated_at) || ts(r.created_at) || 0,
+});
 
 /** Supabase auth errors in plain Chinese */
 function authError(e: { message: string; status?: number }): Error {
@@ -212,6 +217,35 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         .on("postgres_changes", { event: "*", schema: "public", table: "kudos" }, (p: any) => {
           if (p.eventType === "DELETE") { if (p.old?.id) h.onKudos(toKudos(p.old), "delete"); return; }
           h.onKudos(toKudos(p.new), "insert");
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
+
+    // R-007 收工
+    async listReviews(userIds, sinceDay) {
+      if (!userIds.length) return [];
+      const out: DailyReview[] = [];
+      for (let from = 0; ; from += 1000) {
+        const rows = check(await sb.from("daily_reviews").select("*").in("user_id", userIds)
+          .gte("day", sinceDay).order("day", { ascending: false }).range(from, from + 999)) as any[];
+        out.push(...rows.map(toReview));
+        if (rows.length < 1000) break;
+      }
+      return out;
+    },
+    async saveReview(r) {
+      return toReview(check(await sb.from("daily_reviews").upsert({
+        user_id: r.userId, day: r.day, energy: r.energy, impact: r.impact, note: r.note,
+        total_ms: Math.round(r.totalMs), tz: r.tz, updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,day" }).select().single()));
+    },
+    subscribeReviews(userIds, cb) {
+      const set = new Set(userIds);
+      const ch = sb.channel("reviews-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "daily_reviews" }, (p: any) => {
+          const r = p.new && p.new.user_id ? p.new : null;
+          if (r && set.has(r.user_id)) cb(toReview(r));
         })
         .subscribe();
       return () => { sb.removeChannel(ch); };

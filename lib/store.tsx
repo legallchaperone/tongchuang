@@ -2,8 +2,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getBackend } from "./backend";
 import type { Backend } from "./backend/types";
-import type { AuthUser, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
-import { browserTz, DAY } from "./time";
+import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
+import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 
 export interface Toast {
   id: string;
@@ -46,6 +46,9 @@ interface Ctx {
   toggleKudos(sessionId: string, emoji: string): Promise<void>;
   sendSignal(s: DistOmit<Signal, "from" | "at">): Promise<void>;
   signOut(): Promise<void>;
+  /** R-007 收工: everyone's daily reviews (about a year) */
+  reviews: DailyReview[];
+  saveReview(r: Omit<DailyReview, "userId" | "createdAt" | "updatedAt">): Promise<DailyReview>;
 }
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -77,6 +80,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [kudos, setKudos] = useState<Kudos[]>([]);
   const [online, setOnline] = useState<Set<UserId>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [reviews, setReviews] = useState<DailyReview[]>([]);
   const now = useNow(1000);
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
@@ -197,6 +201,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { off(); offP(); offS(); };
   }, [status, me, idsKey, roomKey, backend, pushToast]);
 
+  // R-007 收工: reviews load on their own so they never hold up the first screen
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    const ids = idsKey.split(",").filter(Boolean);
+    let alive = true;
+    const upsert = (r: DailyReview) => setReviews((list) => [r, ...list.filter((x) => !(x.userId === r.userId && x.day === r.day))]);
+    backend.listReviews(ids, addDaysKey(dayKey(Date.now(), "UTC"), -370))
+      .then((rs) => { if (alive) setReviews(rs.sort((a, b) => b.updatedAt - a.updatedAt)); })
+      .catch(() => { /* table missing until the R-007 migration runs: the feature just stays empty */ });
+    const off = backend.subscribeReviews(ids, upsert);
+    return () => { alive = false; off(); };
+  }, [status, me, idsKey, backend]);
+
   const reload = useCallback(async () => { if (me) await load(me); }, [me, load]);
 
   const value: Ctx = {
@@ -240,6 +257,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
     async signOut() { await backend.signOut(); },
+    reviews,
+    async saveReview(r) {
+      if (!me) throw new Error("还没登录");
+      const saved = await backend.saveReview({ ...r, userId: me.id });
+      setReviews((list) => [saved, ...list.filter((x) => !(x.userId === saved.userId && x.day === saved.day))]);
+      return saved;
+    },
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
