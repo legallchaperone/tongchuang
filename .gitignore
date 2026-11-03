@@ -3,3 +3,6 @@ node_modules
 .env*.local
 next-env.d.ts
 *.tsbuildinfo
+
+# Claude Code 临时工作区
+.claude/worktrees/
