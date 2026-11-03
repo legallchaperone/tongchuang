@@ -19,10 +19,13 @@ export function useAuthGate() {
   const app = useApp();
   const router = useRouter();
   const path = usePathname();
+  const needsOnboarding = app.status === "ready" && !!app.myProfile && app.myProfile.look == null;
   useEffect(() => {
-    if (app.status === "signedOut") router.replace("/login?next=" + encodeURIComponent(path + (typeof location !== "undefined" ? location.search : "")));
-  }, [app.status, router, path]);
-  return app.status === "ready";
+    const here = path + (typeof location !== "undefined" ? location.search : "");
+    if (app.status === "signedOut") router.replace("/login?next=" + encodeURIComponent(here));
+    else if (needsOnboarding) router.replace("/welcome?next=" + encodeURIComponent(here));
+  }, [app.status, router, path, needsOnboarding]);
+  return app.status === "ready" && !needsOnboarding;
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {

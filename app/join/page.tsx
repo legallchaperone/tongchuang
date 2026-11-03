@@ -18,6 +18,7 @@ function Join() {
   useEffect(() => {
     if (app.status === "signedOut") { router.replace("/login?next=" + encodeURIComponent("/join?code=" + code)); return; }
     if (app.status !== "ready" || tried.current) return;
+    if (app.myProfile && app.myProfile.look == null) { router.replace("/welcome?next=" + encodeURIComponent("/join?code=" + code)); return; }
     tried.current = true;
     app.joinRoom(code).then((r) => router.replace("/rooms/" + r.id)).catch((e) => setErr(e.message));
   }, [app, code, router]);

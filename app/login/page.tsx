@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
+import { configStatus } from "@/lib/backend";
 import { hhmm } from "@/lib/time";
 import { Logo } from "@/components/Icons";
 import { DeskScene } from "@/components/Pixel";
@@ -28,6 +29,9 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const demo = app.backend.mode === "demo";
+  const cfg = configStatus();
+  const [isLocal, setIsLocal] = useState(true);
+  useEffect(() => { setIsLocal(/^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname)); }, []);
 
   useEffect(() => { if (app.status === "ready") router.replace(next); }, [app.status, next, router]);
 
@@ -71,6 +75,13 @@ function Login() {
             <h1 style={{ fontSize: 22 }}>{demo ? "体验同窗" : mode === "up" ? "创建账号" : "登录"}</h1>
             <p className="muted" style={{ marginTop: 6 }}>{demo ? "当前是演示模式：会生成两位模拟的同窗和几个月的示例数据，全部只保存在这个浏览器。" : "用邮箱登录，数据在你的所有设备上同步。"}</p>
           </div>
+          {demo && !isLocal && (
+            <div className="config-warn">
+              网站还没连上数据库，所以现在是演示模式。请在 Vercel → Settings → Environment Variables 里确认有{" "}
+              {!cfg.url && <code>NEXT_PUBLIC_SUPABASE_URL</code>}{!cfg.url && !cfg.key && " 和 "}{!cfg.key && <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>}
+              ，然后到 Deployments 里对最新一次部署点 Redeploy（变量只在构建时生效）。
+            </div>
+          )}
           {!demo && (
             <div className="seg" role="group" aria-label="登录方式" style={{ alignSelf: "flex-start" }}>
               <button type="button" aria-pressed={mode === "in"} onClick={() => setMode("in")}>密码登录</button>
