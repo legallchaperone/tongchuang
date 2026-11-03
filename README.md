@@ -6,7 +6,7 @@
 
 和朋友一起专注学习的像素风自习室。每个人有一张自己的小书桌：你开始专注，你的小人就坐到桌前；<br>朋友在伦敦、纽约还是上海，打开页面都能看到你在学什么、学了多久。
 
-[立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md)
+[立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
 ![version](https://img.shields.io/badge/version-1.3.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)

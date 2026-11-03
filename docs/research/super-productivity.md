@@ -1,5 +1,7 @@
 # 调研：Super Productivity 里哪些功能和交互可以搬到同窗
 
+> 2026-11-03 更新：离开检测、久坐提醒已决定不做。落地的需求统一记在 [需求池](../BACKLOG.md)。
+
 > 2026-11-03。资料来源：Super Productivity 官方仓库的 README、界面英文文案（`src/assets/i18n/en.json`）与专注模式源码（`src/app/features/focus-mode/`），以及官网页面的搜索摘要。官网本身在调研环境里打不开，下文凡是写“文案”的地方都是直接从它的界面字符串里摘的。
 
 ## 先说结论
