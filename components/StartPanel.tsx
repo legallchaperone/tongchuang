@@ -6,6 +6,41 @@ import { useFocus } from "@/lib/focus";
 import type { FocusMode } from "@/lib/types";
 import { IPlay, IPlus } from "./Icons";
 import { seriesVar } from "./bits";
+import { PxIcon } from "./Pixel";
+import { lastCountdownMin, MODE_INFO, MODES, normMode } from "@/lib/focusModes";
+
+const MODE_ICON: Record<FocusMode, string> = { pomodoro: "tomato", stopwatch: "star", countdown: "hourglass" };
+
+/** R-001: pick 番茄钟 / 心流 / 倒计时, one line each */
+export function ModePicker({ mode, onChange }: { mode: FocusMode; onChange: (m: FocusMode) => void }) {
+  return (
+    <div className="modecards" role="radiogroup" aria-label="专注模式">
+      {MODES.map((m) => (
+        <button key={m} type="button" role="radio" aria-checked={mode === m} className={`modecard m-${m}`} onClick={() => onChange(m)}>
+          <PxIcon name={MODE_ICON[m]} size={20} />
+          <b>{MODE_INFO[m].name}</b>
+          <small>{MODE_INFO[m].desc}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** − [n] + 分钟 */
+export function MinuteStepper({ value, onChange, min = 1, max = 300, id }: { value: number; onChange: (v: number) => void; min?: number; max?: number; id?: string }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => { setText(String(value)); }, [value]);
+  const commit = (t = text) => { const n = Math.round(Number(t)); const v = Number.isFinite(n) && t.trim() ? Math.max(min, Math.min(max, n)) : value; setText(String(v)); if (v !== value) onChange(v); };
+  return (
+    <span className="stepper">
+      <button type="button" aria-label="少 1 分钟" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>−</button>
+      <input id={id} className="num" inputMode="numeric" aria-label="分钟" value={text} onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={() => commit()} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} />
+      <button type="button" aria-label="多 1 分钟" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>+</button>
+      <span className="u">分钟</span>
+    </span>
+  );
+}
 
 export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?: { mode?: FocusMode; minutes?: number; task?: string; withUser?: string | null } }) {
   const app = useApp();
@@ -26,8 +61,11 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
 
   const [task, setTask] = useState(initial?.task || "");
   const [subjectId, setSubjectId] = useState<string | null>(recent[0]?.subjectId ?? mine[0]?.id ?? null);
-  const [mode, setMode] = useState<FocusMode>(initial?.mode || "pomodoro");
-  const [minutes, setMinutes] = useState<number>(initial?.minutes || prof.pomodoroMin);
+  const [mode, setMode] = useState<FocusMode>(initial?.mode ? normMode(initial.mode) : "pomodoro");
+  const [minutes, setMinutes] = useState<number>((initial?.mode === "pomodoro" || !initial?.mode) && initial?.minutes ? initial.minutes : prof.pomodoroMin);
+  const [cdMin, setCdMin] = useState<number>(initial?.mode === "countdown" && initial.minutes ? initial.minutes : 30);
+  // 倒计时记住上次的时长
+  useEffect(() => { if (!(initial?.mode === "countdown" && initial.minutes)) setCdMin(lastCountdownMin()); }, [initial?.mode, initial?.minutes]);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
@@ -49,7 +87,7 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
   }
 
   function go() {
-    focus.start({ mode, minutes, task: task.trim(), subjectId, withUser: initial?.withUser || null });
+    focus.start({ mode, minutes: mode === "countdown" ? cdMin : mode === "pomodoro" ? minutes : 0, task: task.trim(), subjectId, withUser: initial?.withUser || null });
     router.push("/focus");
   }
 
@@ -87,16 +125,18 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
           )}
         </div>
       </div>
-      <div className={dark ? "" : "row"} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: dark ? "space-between" : "flex-start" }}>
-        <div className="seg" role="group" aria-label="计时方式">
-          <button aria-pressed={mode === "pomodoro"} onClick={() => setMode("pomodoro")}>番茄钟</button>
-          <button aria-pressed={mode === "stopwatch"} onClick={() => setMode("stopwatch")}>正计时</button>
-        </div>
+      <div>
+        {dark && <div className="lbl">专注模式</div>}
+        <ModePicker mode={mode} onChange={setMode} />
+      </div>
+      <div className="modeopts" style={{ justifyContent: dark ? "space-between" : "flex-start" }}>
         {mode === "pomodoro" && (
           <div className="seg" role="group" aria-label="番茄时长">
-            {[25, 45, 60, 90].map((m) => <button key={m} aria-pressed={minutes === m} onClick={() => setMinutes(m)}>{m} 分</button>)}
+            {Array.from(new Set([25, 45, 60, 90, prof.pomodoroMin, minutes])).sort((a, b) => a - b).map((m) => <button key={m} aria-pressed={minutes === m} onClick={() => setMinutes(m)}>{m} 分</button>)}
           </div>
         )}
+        {mode === "countdown" && <MinuteStepper id="start-cd" value={cdMin} onChange={setCdMin} />}
+        {mode === "stopwatch" && <span className="modehint">从 0 开始数。每满 25 分钟，窗外亮一颗星星。</span>}
         {dark && <button className="fbtn main" onClick={go} style={{ marginLeft: "auto" }}><IPlay /> 开始</button>}
       </div>
     </div>

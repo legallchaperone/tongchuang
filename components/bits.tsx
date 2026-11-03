@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { liveStateText } from "@/lib/focusModes";
 import type { LiveStatus, Profile } from "@/lib/types";
 import { PixelAvatar } from "./Pixel";
 
@@ -36,8 +37,7 @@ export function Ring({ value, size = 132, children }: { value: number; size?: nu
 
 export function StatePill({ l }: { l?: LiveStatus }) {
   const s = l?.state || "idle";
-  const txt = s === "focus" ? "专注中" : s === "break" ? "休息中" : s === "paused" ? "暂停" : "离开";
-  return <span className={`state-pill ${s}`}>{txt}</span>;
+  return <span className={`state-pill ${s}${s === "focus" && l?.mode === "stopwatch" ? " flow" : ""}`}>{liveStateText(l)}</span>;
 }
 
 export function Spinner() {

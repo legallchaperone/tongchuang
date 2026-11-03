@@ -194,7 +194,7 @@ export function Landing() {
             <span className="lp-num">1</span>
             <b>写下要做的事</b>
             <div className="inset lp-mock">线代 第 4 章 特征值习题<span className="chip" aria-pressed="true" style={{ marginLeft: 8 }}><span className="dot" style={{ background: "var(--s0)" }} />线性代数</span></div>
-            <p>选科目，选番茄钟（25 / 45 / 60 / 90 分钟）或正计时，回车开始。</p>
+            <p>选科目，选番茄钟、心流（正计时）或倒计时，回车开始。</p>
           </li>
           <li className="card pad">
             <span className="lp-num">2</span>

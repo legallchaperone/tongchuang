@@ -23,13 +23,13 @@ function rng(seed: number) {
 }
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
-type Friend = { id: UserId; name: string; color: number; tz: string; look: { skin: number; hair: number; hairColor: number }; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number };
+type Friend = { id: UserId; name: string; color: number; tz: string; look: { skin: number; hair: number; hairColor: number }; blocks: [number, number][]; subjects: [string, number][]; tasks: Record<string, string[]>; goal: number; /** studies in flow mode (R-001) */ flow?: boolean };
 
 function friendsFor(myTz: string): Friend[] {
   // pick friend zones that differ from the viewer's
   const far = myTz.startsWith("America") ? ["Asia/Shanghai", "Europe/London"] : myTz.startsWith("Europe") ? ["America/New_York", "Asia/Shanghai"] : ["America/New_York", "Europe/London"];
   return [
-    { id: "demo-lin", name: "林舟", color: 1, tz: far[0], goal: 300, look: { skin: 1, hair: 4, hairColor: 1 },
+    { id: "demo-lin", name: "林舟", color: 1, tz: far[0], goal: 300, flow: true, look: { skin: 1, hair: 4, hairColor: 1 },
       blocks: [[9.5, 12], [14.5, 17.5], [20.5, 23.5]],
       subjects: [["算法", 2], ["GRE 词汇", 4], ["实验报告", 6]],
       tasks: { "算法": ["动态规划专题", "LeetCode 周赛复盘", "图论 最短路"], "GRE 词汇": ["再要你命 List 12", "填空 30 题"], "实验报告": ["数据清洗", "写讨论部分"] } },
@@ -144,6 +144,16 @@ export function createDemoBackend(): Backend {
         const sub = fsubs[Math.floor(r() * fsubs.length)];
         const cycle = 30; // 25 focus + 5 break
         const minsIn = (h - block[0]) * 60;
+        if (f.flow) {
+          // 心流：a whole block in one go, counting up from its start
+          const blockStart = now - minsIn * MIN;
+          const task = (f.tasks[sub.name] || ["自习"])[0] || "自习";
+          if (cur.state !== "focus" || cur.mode !== "stopwatch" || cur.startedAt !== blockStart) {
+            Object.assign(cur, { userId: f.id, state: "focus", task, subjectName: sub.name, subjectColor: sub.color, mode: "stopwatch", startedAt: blockStart, plannedEnd: null, accumulatedMs: 0, runningSince: blockStart, updatedAt: now });
+            emitLive(cur);
+          }
+          continue;
+        }
         const inCycle = minsIn % cycle;
         const cycleStart = now - inCycle * MIN;
         const focusing = inCycle < 25;
@@ -158,6 +168,12 @@ export function createDemoBackend(): Backend {
         }
         if (cur.state !== next.state || cur.startedAt !== next.startedAt) { Object.assign(cur, next); emitLive(cur); }
       } else if (cur.state !== "idle") {
+        // a flow block just ended: log it
+        if (cur.state === "focus" && cur.mode === "stopwatch" && cur.startedAt && now - cur.startedAt > MIN && now - cur.startedAt < 6 * 60 * MIN) {
+          const sub = fsubs.find((x) => x.name === cur.subjectName);
+          const x: Session = { id: uid(), userId: f.id, subjectId: sub?.id || null, task: cur.task, startedAt: cur.startedAt, endedAt: now, durationMs: now - cur.startedAt, mode: "stopwatch", rating: 5, note: "", tz: f.tz };
+          db.sessions.push(x); emitSession(x, "upsert");
+        }
         Object.assign(cur, { state: "idle", task: "", subjectName: "", subjectColor: null, startedAt: null, plannedEnd: null, runningSince: null, accumulatedMs: 0, updatedAt: now });
         emitLive(cur);
       }

@@ -51,8 +51,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/focus" className="minifocus">
             <span className="pulse" style={{ background: f.phase === "break" ? "var(--ink-3)" : f.runningSince ? "var(--lamp)" : "var(--ink-3)" }} />
             <span style={{ minWidth: 0 }}>
-              <span className="t">{clock(Math.max(0, left))}</span>
-              <small>{f.phase === "break" ? "休息中" : f.runningSince ? f.task || "专注中" : "已暂停"}</small>
+              <span className="t">{f.plannedMs && left < 0 ? "+" + clock(-left) : clock(Math.max(0, left))}</span>
+              <small>{f.phase === "break" ? "休息中" : f.runningSince ? (f.mode === "stopwatch" ? "心流 · " : "") + (f.task || "专注中") : "已暂停"}</small>
             </span>
           </Link>
         )}

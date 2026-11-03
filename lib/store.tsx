@@ -210,7 +210,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (s.kind === "cheer") pushToast({ title: name, body: s.text, color: p?.color });
       if (s.kind === "invite") {
         const q = new URLSearchParams({ mode: s.mode, min: String(s.minutes), task: s.task, with: s.from });
-        pushToast({ title: `${name} 邀请你一起专注`, body: `${s.mode === "pomodoro" ? s.minutes + " 分钟番茄钟" : "正计时"}${s.task ? " · " + s.task : ""}`, color: p?.color, action: { label: "一起开始", href: "/focus?" + q.toString() }, ttl: 20000 });
+        pushToast({ title: `${name} 邀请你一起专注`, body: `${s.mode === "pomodoro" ? s.minutes + " 分钟番茄钟" : s.mode === "countdown" ? s.minutes + " 分钟倒计时" : "心流"}${s.task ? " · " + s.task : ""}`, color: p?.color, action: { label: "一起开始", href: "/focus?" + q.toString() }, ttl: 20000 });
       }
     });
     return () => { off(); offP(); offS(); };

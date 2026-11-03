@@ -5,8 +5,10 @@ import { useApp } from "@/lib/store";
 import { browserTz, COMMON_TZS, hhmm, tzCity } from "@/lib/time";
 import { Avatar, seriesVar } from "@/components/bits";
 import { resetDemo } from "@/lib/backend/demo";
-import type { Profile, Subject } from "@/lib/types";
+import type { FocusPrefs, Profile, Subject } from "@/lib/types";
 import { SubjectSheet } from "@/components/SubjectSheet";
+import { BREAK_TABLE, prefsOf, suggestBreakMin } from "@/lib/focusModes";
+import { MIN } from "@/lib/time";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { NumberField } from "@/components/NumberField";
 import Link from "next/link";
@@ -22,6 +24,8 @@ export default function SettingsPage() {
   const [newSubj, setNewSubj] = useState("");
   useEffect(() => { if ("Notification" in window) setNotif(Notification.permission); }, []);
   const dirty = JSON.stringify(p) !== JSON.stringify(app.myProfile);
+  const fp = prefsOf(p);
+  const setFp = (patch: Partial<FocusPrefs>) => setP({ ...p, focusPrefs: { ...fp, ...patch } });
   const mine = app.subjects.filter((s) => s.userId === app.me!.id);
   const tzs = Array.from(new Set([browserTz(), p.tz, ...COMMON_TZS]));
 
@@ -72,6 +76,38 @@ export default function SettingsPage() {
             <label className="label" htmlFor="set-break">休息时长（分）</label>
             <NumberField id="set-break" min={1} max={60} value={p.breakMin} onCommit={(v) => setP({ ...p, breakMin: v })} />
           </div>
+        </div>
+        <label className="switchrow" htmlFor="set-overtime">
+          <span>
+            <b>番茄钟时间到了继续计时</b>
+            <small className="muted">时间到了只提醒，不自动休息。准备好了再点结束。</small>
+          </span>
+          <input id="set-overtime" type="checkbox" className="pxswitch" checked={fp.pomoOvertime} onChange={(e) => setFp({ pomoOvertime: e.target.checked })} />
+        </label>
+        <div className="field">
+          <span className="label" id="set-flow-lbl">心流结束后，建议休息多久</span>
+          <div className="seg" role="group" aria-labelledby="set-flow-lbl" style={{ alignSelf: "flex-start" }}>
+            <button aria-pressed={fp.flowBreak === "ratio"} onClick={() => setFp({ flowBreak: "ratio" })}>按比例</button>
+            <button aria-pressed={fp.flowBreak === "table"} onClick={() => setFp({ flowBreak: "table" })}>按时长查表</button>
+          </div>
+          {fp.flowBreak === "ratio" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <label htmlFor="set-flow-pct">专注时长的</label>
+              <span style={{ display: "inline-flex", flexDirection: "column", width: 90 }}>
+                <NumberField id="set-flow-pct" min={5} max={50} value={fp.flowPct} onCommit={(v) => setFp({ flowPct: v })} />
+              </span>
+              <span>%，例如专注 50 分钟休息 {suggestBreakMin(50 * MIN, fp)} 分钟</span>
+            </div>
+          ) : (
+            <table className="breaktable">
+              <thead><tr><th>专注</th><th>休息</th></tr></thead>
+              <tbody>
+                {BREAK_TABLE.map(([upTo, b], i) => (
+                  <tr key={i}><td>{i === 0 ? `不到 ${upTo} 分钟` : upTo === Infinity ? `${BREAK_TABLE[i - 1][0]} 分钟以上` : `${BREAK_TABLE[i - 1][0]}–${upTo} 分钟`}</td><td className="num">{b} 分钟</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 

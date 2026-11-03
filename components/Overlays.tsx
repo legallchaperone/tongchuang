@@ -2,7 +2,9 @@
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
-import { useFocus } from "@/lib/focus";
+import { useFocus, type NextStep } from "@/lib/focus";
+import { prefsOf, suggestBreakMin } from "@/lib/focusModes";
+import { usePathname, useRouter } from "next/navigation";
 import { msOnDay } from "@/lib/stats";
 import { dur, dayKey, MIN } from "@/lib/time";
 import { IClose } from "./Icons";
@@ -34,11 +36,13 @@ export function ReflectionSheet() {
   const app = useApp();
   const focus = useFocus();
   const p = focus.pending;
+  const router = useRouter();
+  const path = usePathname();
   const [rating, setRating] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [task, setTask] = useState("");
   const [subjectId, setSubjectId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<NextStep | null>(null);
   const [mins, setMins] = useState(0);
   const [shown, setShown] = useState(false);
 
@@ -57,18 +61,24 @@ export function ReflectionSheet() {
   const after = before + chosen;
   const pct = Math.round((after / goal) * 100);
 
-  async function save() {
-    setSaving(true);
-    try { await focus.saveReflection({ rating, note: note.trim(), task: task.trim(), subjectId, durationMs: mins >= maxMins ? p!.durationMs : chosen }); }
+  // R-004: the suggested break follows the time you actually record
+  const pomo = p.mode === "pomodoro";
+  const breakMin = pomo ? p.breakMin || app.myProfile.breakMin : suggestBreakMin(chosen, prefsOf(app.myProfile));
+  const inBreak = focus.state?.phase === "break";
+
+  async function save(then: NextStep) {
+    setSaving(then);
+    if (path !== "/focus") router.push("/focus");
+    try { await focus.saveReflection({ rating, note: note.trim(), task: task.trim(), subjectId, durationMs: mins >= maxMins ? p!.durationMs : chosen, then }); }
     catch (e) { app.pushToast({ title: "保存失败", body: (e as Error).message }); }
-    finally { setSaving(false); }
+    finally { setSaving(null); }
   }
 
   return (
     <div className="scrim" role="dialog" aria-modal="true" aria-labelledby="refl-title">
-      <div className="sheet">
+      <div className="sheet card">
         <div>
-          <p className="muted" id="refl-title">{p.completedPomodoro ? "完成一个番茄 🍅" : "本次专注结束"}</p>
+          <p className="muted" id="refl-title">{p.completedPomodoro ? "完成一个番茄 🍅" : p.mode === "stopwatch" ? "心流结束" : p.mode === "countdown" ? "倒计时结束" : "本次专注结束"}</p>
           <div className="done-num" style={{ marginTop: 8 }}>{dur(chosen)}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
             <label className="muted" htmlFor="refl-min">{p.durationMs > 2 * 3600000 ? "计了很久，中途离开过吗？实际专注" : "实际专注"}</label>
@@ -112,9 +122,20 @@ export function ReflectionSheet() {
             </select>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <button className="btn ghost" onClick={() => focus.dropReflection()}>不记录这次</button>
-          <button className="btn primary lg" disabled={saving} onClick={save}>{saving ? "保存中…" : "保存记录"}</button>
+        <div className="nextsteps">
+          <span className="label">保存记录，接下来</span>
+          <div className="row3" role="group" aria-label="接下来做什么">
+            <button className="btn primary" disabled={!!saving} onClick={() => save("break")}>
+              {saving === "break" ? "保存中…" : <>休息<small>{pomo ? `${breakMin} 分钟${inBreak ? "，已开始" : ""}` : `建议 ${breakMin} 分钟`}</small></>}
+            </button>
+            <button className="btn" disabled={!!saving} onClick={() => save("again")}>
+              {saving === "again" ? "保存中…" : <>再来一轮<small>{pomo ? `${p.focusMin || app.myProfile.pomodoroMin} 分钟番茄` : p.mode === "countdown" ? `倒计时 ${p.focusMin || 30} 分钟` : "心流，从 0 开始"}</small></>}
+            </button>
+            <button className="btn" disabled={!!saving} onClick={() => save("switch")}>
+              {saving === "switch" ? "保存中…" : <>换个任务<small>重新选任务和模式</small></>}
+            </button>
+          </div>
+          <button className="btn ghost sm" style={{ alignSelf: "flex-start" }} onClick={() => focus.dropReflection()}>不记录这次</button>
         </div>
       </div>
     </div>

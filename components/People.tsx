@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { liveFocusMs, todayMs as todayFocus } from "@/lib/stats";
+import { livePrefix } from "@/lib/focusModes";
 import type { Session, UserId } from "@/lib/types";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
 import { IHand, IUsers } from "./Icons";
@@ -52,7 +53,7 @@ export function PersonRow({ id }: { id: UserId }) {
         <div className="where">{tzCity(tz)} {hhmm(now, tz)} · {phaseLabel[phase]}{isMe ? "" : ` · ${tzDiffLabel(tz, app.myProfile.tz, now)}`}</div>
       </div>
       <div className="right">
-        <span className="timer">{l?.state === "focus" || l?.state === "paused" ? (left != null && left > 0 ? clock(left) : clock(focusMs)) : l?.state === "break" && left ? clock(Math.max(0, left)) : <span className="muted" style={{ fontSize: 12 }}>今日 {dur(todayMs)}</span>}</span>
+        <span className="timer">{l?.state === "focus" || l?.state === "paused" ? <><small className="pre">{livePrefix(l, now)}</small>{left != null && left > 0 ? clock(left) : clock(focusMs)}</> : l?.state === "break" && left ? clock(Math.max(0, left)) : <span className="muted" style={{ fontSize: 12 }}>今日 {dur(todayMs)}</span>}</span>
         {!isMe && (
           <span className="acts">
             {sent ? <span className="muted" style={{ fontSize: 12, padding: "6px 4px" }}>{sent} ✓</span> : <>
