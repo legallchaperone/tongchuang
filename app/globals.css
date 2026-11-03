@@ -533,3 +533,96 @@ table td, table th { line-height: 20px; }
 table tr + tr { border-top: 2px dashed var(--slot) !important; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---- R-001 专注模式 ---- */
+/* 模式卡片：番茄钟 / 心流 / 倒计时 */
+.modecards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.modecard {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; text-align: left;
+  padding: 8px 10px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink-2); clip-path: var(--notch);
+  box-shadow: inset 0 -4px 0 var(--panel-2), inset 0 2px 0 #fff6; min-width: 0;
+}
+.modecard .pxi { grid-row: 1 / 3; }
+.modecard b { font-weight: 400; color: var(--ink); line-height: 20px; }
+.modecard small { color: var(--ink-3); font-size: 12px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modecard:hover { filter: brightness(1.05); }
+.modecard[aria-checked="true"] { background: var(--lamp-soft); box-shadow: inset 0 -4px 0 var(--lamp); }
+.modecard[aria-checked="true"] small { color: var(--ink-2); }
+.modecard.m-pomodoro .pxi { color: #d4553c; }
+.modecard.m-stopwatch .pxi { color: #d99a14; }
+.modecard.m-countdown .pxi { color: #3f7d9c; }
+@media (max-width: 520px) {
+  .modecards { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .modecard { padding: 6px 10px; }
+}
+.modeopts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; min-height: 36px; }
+.modehint { color: var(--ink-3); }
+.stepper { display: inline-flex; align-items: center; gap: 0; }
+.stepper button { width: 32px; height: 32px; border: 2px solid var(--edge); background: var(--wood-dk); color: var(--on-wood); font-size: 18px; line-height: 1; }
+.stepper button:disabled { opacity: .45; }
+.stepper input { width: 56px; height: 32px; text-align: center; border: 2px solid var(--edge); border-left: 0; border-right: 0; background: #fff6dc; color: #3a2016; border-radius: 0; }
+.stepper input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--focus-ring); }
+.stepper .u { margin-left: 8px; color: var(--ink-2); }
+:root[data-theme="dark"] .stepper input { background: #251a12; color: var(--ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .stepper input { background: #251a12; color: var(--ink); } }
+
+/* 计时中：−1 / 时钟（点击改时长）/ +1 */
+.tclock { display: flex; align-items: center; gap: 8px; }
+.tclock .adj {
+  width: 40px; height: 32px; border: 2px solid var(--edge); background: var(--panel-2); color: var(--ink-2); clip-path: var(--notch);
+  box-shadow: inset 0 -3px 0 var(--slot);
+}
+.tclock .adj:hover { color: var(--ink); filter: brightness(1.05); }
+.tclock .adj:disabled { opacity: .4; }
+.tclock button.clock { border: 0; background: transparent; color: inherit; padding: 0 2px; font-size: 48px; line-height: 48px; cursor: text; border-bottom: 2px dashed transparent; }
+.tclock button.clock:hover { border-bottom-color: var(--ink-3); }
+.tclock .clock-edit { display: inline-flex; align-items: baseline; gap: 6px; }
+.tclock .clock-edit input { width: 3.4ch; height: 50px; font-size: 44px; line-height: 44px; text-align: center; border: 2px solid var(--focus-ring); background: #fff6dc; color: #3a2016; border-radius: 0; padding: 0; }
+.tclock .clock-edit small { color: var(--ink-3); }
+:root[data-theme="dark"] .tclock .clock-edit input { background: #251a12; color: var(--ink); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tclock .clock-edit input { background: #251a12; color: var(--ink); } }
+.timerplate .clock.over { color: #c0781a; }
+.overtime-note { padding: 4px 12px; background: var(--lamp); color: #3a2016; box-shadow: 0 0 0 2px #120b07; clip-path: var(--notch); animation: pop .25s steps(3); }
+@media (max-width: 420px) { .timerplate .clock, .tclock button.clock { font-size: 40px; line-height: 44px; } .tclock .adj { width: 34px; } }
+
+/* 心流：星星 */
+.flowstars { flex: 1 1 160px; min-width: 140px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.flowstars .row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.flowstars .st { line-height: 0; position: relative; }
+.flowstars .st.on { color: #e8a91a; }
+.flowstars .st.next { color: var(--slot); }
+.flowstars .st.next .fill { position: absolute; left: 0; bottom: 0; width: 100%; overflow: hidden; display: flex; align-items: flex-end; color: #e8a91a; opacity: .7; }
+.flowstars .st.next .fill .pxi { flex: none; }
+.flowstars .more { color: var(--ink-2); }
+.flowstars small { color: var(--ink-3); font-size: 12px; line-height: 16px; }
+
+/* 同窗看到的“已专注 / 还剩”和“心流中” */
+.timer small.pre, .cof .t small { font-size: 12px; line-height: 12px; margin-right: 4px; color: var(--ink-3); vertical-align: middle; }
+.cof .t small { color: #fff1d2; opacity: .6; }
+.state-pill.focus.flow { background: #ffd866; }
+
+/* 复盘：接下来做什么 */
+.nextsteps { display: flex; flex-direction: column; gap: 8px; }
+.nextsteps .label { margin-bottom: 0; }
+.nextsteps .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.nextsteps .row3 .btn { height: auto; min-height: 52px; padding: 6px 8px; flex-direction: column; gap: 2px; white-space: normal; line-height: 20px; }
+.nextsteps .row3 .btn small { font-size: 12px; line-height: 16px; opacity: .8; }
+@media (max-width: 420px) { .nextsteps .row3 { grid-template-columns: minmax(0, 1fr); } .nextsteps .row3 .btn { flex-direction: row; justify-content: space-between; min-height: 44px; } }
+
+/* 设置：开关与查表 */
+.switchrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.switchrow > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.switchrow b { font-weight: 400; }
+.switchrow small { font-size: 12px; line-height: 16px; }
+.pxswitch {
+  appearance: none; -webkit-appearance: none; flex: none; width: 44px; height: 24px; margin: 0; position: relative; cursor: pointer;
+  background: var(--slot); border: 2px solid var(--edge); clip-path: var(--notch);
+}
+.pxswitch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: var(--panel); box-shadow: inset 0 -3px 0 var(--panel-2); outline: 2px solid var(--edge); outline-offset: -2px; transition: left .15s steps(2); }
+.pxswitch:checked { background: var(--btn); }
+.pxswitch:checked::after { left: 22px; }
+.pxswitch:focus-visible { outline: 2px dashed var(--focus-ring); outline-offset: 2px; }
+.breaktable { margin-top: 10px; border-collapse: collapse; align-self: flex-start; min-width: min(280px, 100%); }
+.breaktable th, .breaktable td { text-align: left; padding: 3px 12px 3px 0; border-bottom: 2px dashed var(--slot); font-weight: 400; }
+.breaktable th { color: var(--ink-3); }
+/* ---- R-001 专注模式 end ---- */

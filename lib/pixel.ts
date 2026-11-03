@@ -212,7 +212,13 @@ export interface SceneOpts {
   seed: number;
   rain?: boolean;
   present: boolean; // has the app open
+  /** flow mode (R-001): focused ms so far; lights a star per 25 minutes and brightens the lamp */
+  flowMs?: number;
 }
+
+/** where the flow stars appear in the window, in the order they light up (relative to the window, avoiding the sash) */
+const FLOW_STARS: [number, number][] = [[4, 4], [20, 7], [10, 9], [26, 3], [5, 20], [25, 18], [11, 22], [19, 21]];
+const FLOW_STAR_MS = 25 * 60_000;
 
 export const SCENE_W = 96;
 export const SCENE_H = 80;
@@ -353,6 +359,8 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
 
   const seated = o.state === "focus" || o.state === "paused";
   const lampOn = seated;
+  // flow: the lamp warms up over the first two hours
+  const boost = seated && o.flowMs ? Math.min(1, o.flowMs / (120 * 60_000)) : 0;
   // chair back
   const chairC = C.wood;
   if (!seated) {
@@ -405,7 +413,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   const lx = 70;
   rect(ctx, lx, 47, 8, 3, "#2f4a3a"); rect(ctx, lx + 3, 37, 2, 10, "#2f4a3a");
   rect(ctx, lx - 2, 33, 12, 5, "#3f7d5c"); rect(ctx, lx - 1, 32, 10, 1, "#3f7d5c"); rect(ctx, lx - 2, 33, 12, 1, "#5aa27a");
-  rect(ctx, lx + 1, 38, 6, 1, lampOn ? "#fff2a8" : "#6d7a70");
+  rect(ctx, lx + 1, 38, 6, 1, lampOn ? (boost > 0.5 ? "#fffbe0" : "#fff2a8") : "#6d7a70");
 
   // standing character on a break, holding a mug
   if (o.state === "break") {
@@ -422,10 +430,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
     // stepped pool of lamp light: three rings, brightest under the shade
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const k = o.phase === "night" ? 1 : 0.45;
+    const k = (o.phase === "night" ? 1 : 0.45) * (1 + boost * 0.9);
+    const reach = 1 / (1 + boost * 0.3);
     const cx = lx + 4, cy = 44;
-    for (let y = 26; y < 70; y++) for (let x = 24; x < SCENE_W; x++) {
-      const d = Math.hypot((x - cx) * 0.8, (y - cy) * 1.25);
+    for (let y = 22; y < 74; y++) for (let x = 18; x < SCENE_W; x++) {
+      const d = Math.hypot((x - cx) * 0.8, (y - cy) * 1.25) * reach;
       const lvl = d < 10 ? 3 : d < 17 ? 2 : d < 25 ? 1 : 0;
       if (!lvl) continue;
       // checkerboard dither on the outer ring
@@ -434,6 +443,17 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
       ctx.fillRect(x, y, 1, 1);
     }
     ctx.restore();
+  }
+  if (seated && o.flowMs) {
+    // flow: one pixel star outside the window for every 25 focused minutes; the newest one twinkles
+    const n = Math.min(FLOW_STARS.length, Math.floor(o.flowMs / FLOW_STAR_MS));
+    for (let i = 0; i < n; i++) {
+      const sx = wx + FLOW_STARS[i][0], sy = wy + FLOW_STARS[i][1];
+      const tw = i === n - 1 && o.frame % 10 < 5;
+      rect(ctx, sx - 1, sy, 3, 1, "#ffd45a"); rect(ctx, sx, sy - 1, 1, 3, "#ffd45a");
+      if (tw) { rect(ctx, sx - 2, sy, 1, 1, "#ffe9a0"); rect(ctx, sx + 2, sy, 1, 1, "#ffe9a0"); rect(ctx, sx, sy - 2, 1, 1, "#ffe9a0"); rect(ctx, sx, sy + 2, 1, 1, "#ffe9a0"); }
+      rect(ctx, sx, sy, 1, 1, "#fffbe6");
+    }
   }
   if (!o.present && !seated && o.state !== "break" && o.phase === "night") {
     // "Zzz" over the empty chair: they're probably asleep

@@ -6,6 +6,7 @@ import { liveFocusMs, todayMs } from "@/lib/stats";
 import type { UserId } from "@/lib/types";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity, tzDiffLabel } from "@/lib/time";
 import { DeskScene } from "./Pixel";
+import { livePrefix } from "@/lib/focusModes";
 import { seriesVar, StatePill } from "./bits";
 import { IHand, IUsers } from "./Icons";
 
@@ -44,7 +45,7 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
           <StatePill l={l} />
         </div>
         <span className="timer num" style={{ color: active ? "var(--ink)" : "var(--ink-3)" }}>
-          {active ? (left != null && left > 0 ? clock(left) : clock(ms)) : l?.state === "break" && left ? clock(Math.max(0, left)) : "--:--"}
+          {active ? <><small className="pre">{livePrefix(l, now)}</small>{left != null && left > 0 ? clock(left) : clock(ms)}</> : l?.state === "break" && left ? clock(Math.max(0, left)) : "--:--"}
         </span>
         <div className="what">
           {active

@@ -12,6 +12,19 @@ export interface Profile {
   breakMin: number;
   /** pixel character look; null = derived from id */
   look: { skin: number; hair: number; hairColor: number } | null;
+  /** focus-mode preferences (R-001/R-002); missing = defaults */
+  focusPrefs?: FocusPrefs | null;
+}
+
+/** how flow mode suggests a break: a share of the focused time, or a lookup table */
+export type FlowBreakRule = "ratio" | "table";
+
+export interface FocusPrefs {
+  flowBreak: FlowBreakRule;
+  /** percent of the focused time, for the "ratio" rule */
+  flowPct: number;
+  /** pomodoro keeps counting when time is up instead of starting the break */
+  pomoOvertime: boolean;
 }
 
 export interface Subject {
@@ -22,7 +35,11 @@ export interface Subject {
   archived: boolean;
 }
 
-export type FocusMode = "stopwatch" | "pomodoro";
+/**
+ * "pomodoro" = 番茄钟, "stopwatch" = 心流 (counts up from 0; the stored value predates the rename),
+ * "countdown" = 倒计时 (counts down, no automatic break).
+ */
+export type FocusMode = "stopwatch" | "pomodoro" | "countdown";
 
 export interface Session {
   id: string;
@@ -51,7 +68,7 @@ export interface LiveStatus {
   mode: FocusMode;
   /** when the current focus block started */
   startedAt: number | null;
-  /** pomodoro / break planned end, null for stopwatch */
+  /** pomodoro / countdown / break planned end, null for flow (and pomodoro overtime) */
   plannedEnd: number | null;
   /** focused ms accumulated before the current running stretch (for pauses) */
   accumulatedMs: number;

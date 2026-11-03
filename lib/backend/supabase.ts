@@ -10,6 +10,7 @@ const toProfile = (r: any): Profile => ({
   id: r.id, name: r.name || "", color: r.color ?? 0, tz: r.tz || "UTC",
   dailyGoalMin: r.daily_goal_min ?? 240, pomodoroMin: r.pomodoro_min ?? 25, breakMin: r.break_min ?? 5,
   look: r.look && typeof r.look === "object" && "skin" in r.look ? r.look : null,
+  focusPrefs: r.focus_prefs && typeof r.focus_prefs === "object" ? r.focus_prefs : null,
 });
 const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.name, color: r.color ?? 0, archived: !!r.archived });
 const toSession = (r: any): Session => ({
@@ -97,10 +98,20 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       return (check(await sb.from("profiles").select("*").in("id", ids)) as any[]).map(toProfile);
     },
     async saveProfile(p) {
-      check(await sb.from("profiles").upsert({
+      const row: any = {
         id: p.id, name: p.name, color: p.color, tz: p.tz,
         daily_goal_min: p.dailyGoalMin, pomodoro_min: p.pomodoroMin, break_min: p.breakMin, look: p.look,
-      }));
+      };
+      if (p.focusPrefs) row.focus_prefs = p.focusPrefs;
+      const { error } = await sb.from("profiles").upsert(row);
+      if (!error) return;
+      // R-001/R-002: the database may not have focus_prefs yet (schema.sql not re-run); save the rest
+      if (row.focus_prefs && /focus_prefs/.test(error.message)) {
+        delete row.focus_prefs;
+        check(await sb.from("profiles").upsert(row));
+        throw new Error("其他设置已保存。专注模式的设置需要先更新数据库：在 Supabase 里重新运行 supabase/schema.sql。");
+      }
+      throw new Error(error.message);
     },
 
     async listSubjects(userIds) {
@@ -148,10 +159,16 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       return out;
     },
     async addSession(s) {
-      return toSession(check(await sb.from("sessions").insert({
+      const row: any = {
         user_id: s.userId, subject_id: s.subjectId, task: s.task, started_at: iso(s.startedAt), ended_at: iso(s.endedAt),
         duration_ms: Math.round(s.durationMs), mode: s.mode, rating: s.rating, note: s.note, tz: s.tz,
-      }).select().single()));
+      };
+      const res = await sb.from("sessions").insert(row).select().single();
+      // R-001: before the schema migration the mode check only knows stopwatch/pomodoro; keep the record anyway
+      if (res.error && s.mode === "countdown" && /sessions_mode_check|check constraint/i.test(res.error.message)) {
+        return toSession(check(await sb.from("sessions").insert({ ...row, mode: "stopwatch" }).select().single()));
+      }
+      return toSession(check(res));
     },
     async updateSession(id, patch) {
       const row: any = {};

@@ -209,3 +209,9 @@ do $$ begin
   begin alter publication supabase_realtime add table public.sessions; exception when others then null; end;
   begin alter publication supabase_realtime add table public.kudos; exception when others then null; end;
 end $$;
+
+-- ───────────── R-001 / R-002 专注模式（v1.4）：倒计时模式 + 专注偏好 ─────────────
+-- 幂等：可重复运行。sessions.mode 新增 'countdown'（'stopwatch' 即“心流”）；profiles 新增 focus_prefs。
+alter table public.sessions drop constraint if exists sessions_mode_check;
+alter table public.sessions add constraint sessions_mode_check check (mode in ('stopwatch','pomodoro','countdown'));
+alter table public.profiles add column if not exists focus_prefs jsonb;

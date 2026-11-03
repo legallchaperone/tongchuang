@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { LiveStatus, Profile } from "@/lib/types";
 import { defaultLook, drawScene, pick, portrait, SCENE_H, SCENE_W, SHIRTS, type AvatarLook } from "@/lib/pixel";
 import { partsIn, phaseAt } from "@/lib/time";
+import { liveFocusMs } from "@/lib/stats";
 
 /* one shared animation clock (~6 fps) */
 let frame = 0;
@@ -42,13 +43,14 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6, at }: 
     drawScene(ctx, {
       look: lookOf(p), shirt: shirtOf(p), state: live?.state || "idle", hour: t.h + t.mi / 60, minute: t.mi, phase: phaseAt(t.h),
       frame: reduce ? 0 : f, seed: seedOf(p.id), rain, present,
+      flowMs: live && live.mode === "stopwatch" ? liveFocusMs(live, at ?? Date.now()) : 0,
     });
-  }, [f, p, live?.state, present, rain, reduce, at]);
+  }, [f, p, live, present, rain, reduce, at]);
 
   return (
     <div ref={wrap} className="scene-wrap">
       <canvas ref={ref} width={SCENE_W} height={SCENE_H} className="scene" style={{ width: SCENE_W * scale, height: SCENE_H * scale }}
-        role="img" aria-label={`${p.name}的书桌：${live?.state === "focus" ? "正在专注" : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : "不在座位"}`} />
+        role="img" aria-label={`${p.name}的书桌：${live?.state === "focus" ? (live.mode === "stopwatch" ? "心流中" : "正在专注") : live?.state === "break" ? "在休息" : live?.state === "paused" ? "暂停中" : "不在座位"}`} />
     </div>
   );
 }
@@ -86,6 +88,9 @@ const ICONS: Record<string, string[]> = {
   trash: ["...####...", "##########", ".#......#.", ".#.#.#..#.", ".#.#.#..#.", ".#.#.#..#.", ".#.#.#..#.", ".#.#.#..#.", ".#......#.", "..######.."],
   heart: [".##...##..", "####.####.", "#########.", "#########.", ".#######..", "..#####...", "...###....", "....#.....", "..........", ".........."],
   flame: ["....#.....", "...##.....", "...###....", "..####.#..", "..######..", ".########.", ".###..###.", ".##....##.", "..##..##..", "...####..."],
+  tomato: ["...#.#....", "....##....", "..######..", ".########.", "##########", "##########", "##########", ".########.", "..######..", ".........."],
+  star: ["....##....", "....##....", "...####...", "##########", ".########.", "..######..", "..######..", ".###..###.", ".##....##.", ".........."],
+  hourglass: ["##########", ".#......#.", "..#....#..", "...####...", "....##....", "....##....", "...#..#...", "..#.##.#..", ".########.", "##########"],
   sound: [".....#....", "....##..#.", "#####.#..#", "####..#..#", "####..#..#", "#####.#..#", "....##..#.", ".....#....", "..........", ".........."],
 };
 export function PxIcon({ name, size = 18, title }: { name: keyof typeof ICONS | string; size?: number; title?: string }) {
