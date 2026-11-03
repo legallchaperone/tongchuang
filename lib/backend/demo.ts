@@ -343,7 +343,7 @@ export function createDemoBackend(): Backend {
     },
     async leaveRoom(id) { const r = db.rooms.find((x) => x.id === id); if (r) r.memberIds = r.memberIds.filter((m) => m !== ME); save(); },
 
-    listSessions: async (ids, since) => delay(db.sessions.filter((s) => ids.includes(s.userId) && s.startedAt >= since)),
+    listSessions: async (ids, since, until) => delay(db.sessions.filter((s) => ids.includes(s.userId) && s.startedAt >= since && (until == null || s.startedAt < until))),
     async addSession(s) {
       const full = { ...s, id: uid() };
       db.sessions.push(full); save(); emitSession(full, "upsert");
@@ -375,6 +375,7 @@ export function createDemoBackend(): Backend {
       save(); emitLive({ ...next });
     },
     listKudos: async (ids) => delay(db.kudos.filter((k) => ids.includes(k.sessionId))),
+    listRecentKudos: async (since) => delay(db.kudos.filter((k) => k.createdAt >= since)),
     async addKudos(sessionId, emoji) {
       if (db.kudos.some((k) => k.sessionId === sessionId && k.fromUser === ME && k.emoji === emoji)) return;
       const k: Kudos = { id: uid(), sessionId, fromUser: ME, emoji, createdAt: Date.now() };

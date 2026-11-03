@@ -55,6 +55,12 @@ export function createSupabaseBackend(url: string, key: string): Backend {
   const sb: SupabaseClient = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
   const toUser = (u: any): AuthUser | null => (u ? { id: u.id, email: u.email ?? null } : null);
   const userChannels = new Map<string, RealtimeChannel>();
+  /** my id from the locally stored session (getUser() would be a network round trip) */
+  const myId = async () => {
+    const { data } = await sb.auth.getSession();
+    if (!data.session) throw new Error("没有登录");
+    return data.session.user.id;
+  };
 
   async function roomsWithMembers(rows: any[]): Promise<Room[]> {
     if (!rows.length) return [];
@@ -143,12 +149,14 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     },
 
     async listRooms() {
-      const { data: u } = await sb.auth.getUser();
-      if (!u.user) return [];
-      const mine = check(await sb.from("room_members").select("room_id").eq("user_id", u.user.id)) as any[];
-      if (!mine.length) return [];
-      const rows = check(await sb.from("rooms").select("*").in("id", mine.map((m) => m.room_id)).order("created_at")) as any[];
-      return roomsWithMembers(rows);
+      const { data: s } = await sb.auth.getSession();
+      if (!s.session) return [];
+      // one request instead of four: RLS only returns the rooms I'm in, and every member of those rooms
+      const rows = check(await sb.from("rooms").select("*, room_members(user_id)").order("created_at")) as any[];
+      return rows.map((r) => ({
+        id: r.id, name: r.name, code: r.code, createdBy: r.created_by,
+        memberIds: ((r.room_members || []) as any[]).map((m) => m.user_id),
+      }));
     },
     async createRoom(name) {
       const r = check(await sb.rpc("create_room", { room_name: name }));
@@ -160,21 +168,34 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       return (await roomsWithMembers([data]))[0];
     },
     async leaveRoom(roomId) {
-      const { data: u } = await sb.auth.getUser();
-      check(await sb.from("room_members").delete().eq("room_id", roomId).eq("user_id", u.user!.id));
+      check(await sb.from("room_members").delete().eq("room_id", roomId).eq("user_id", await myId()));
     },
 
-    async listSessions(userIds, sinceMs) {
+    async listSessions(userIds, sinceMs, untilMs) {
       if (!userIds.length) return [];
-      const out: Session[] = [];
-      // page through in 1000-row chunks
-      for (let from = 0; ; from += 1000) {
-        const rows = check(await sb.from("sessions").select("*").in("user_id", userIds)
-          .gte("started_at", iso(sinceMs)!).order("started_at", { ascending: false }).range(from, from + 999)) as any[];
-        out.push(...rows.map(toSession));
-        if (rows.length < 1000) break;
+      const PAGE = 1000; // PostgREST's max rows per response on Supabase
+      const page = (from: number, count: boolean) => {
+        let q = sb.from("sessions").select("*", count ? { count: "exact" } : undefined).in("user_id", userIds).gte("started_at", iso(sinceMs)!);
+        if (untilMs != null) q = q.lt("started_at", iso(untilMs)!);
+        return q.order("started_at", { ascending: false }).range(from, from + PAGE - 1);
+      };
+      // the first page also returns the total, so the remaining pages can be fetched in parallel
+      const first = await page(0, true);
+      const rows = [...(check(first) as any[])];
+      if (rows.length >= PAGE) {
+        if (first.count != null) {
+          const rest = await Promise.all(Array.from({ length: Math.ceil((first.count - PAGE) / PAGE) }, (_, i) => page(PAGE * (i + 1), false)));
+          rest.forEach((r) => rows.push(...(check(r) as any[])));
+        } else {
+          for (let from = PAGE; ; from += PAGE) {
+            const more = check(await page(from, false)) as any[];
+            rows.push(...more);
+            if (more.length < PAGE) break;
+          }
+        }
       }
-      return out;
+      const seen = new Set<string>();
+      return rows.filter((r) => !seen.has(r.id) && !!seen.add(r.id)).map(toSession);
     },
     async addSession(s) {
       const row: any = {
@@ -234,27 +255,38 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       }
       return out;
     },
+    async listRecentKudos(sinceMs) {
+      // a kudos is always given after the record started, so this covers every record since sinceMs
+      return (check(await sb.from("kudos").select("*").gte("created_at", iso(sinceMs)!)) as any[]).map(toKudos);
+    },
     async addKudos(sessionId, emoji) {
-      const { data: u } = await sb.auth.getUser();
-      const { error } = await sb.from("kudos").insert({ session_id: sessionId, from_user: u.user!.id, emoji });
+      const { error } = await sb.from("kudos").insert({ session_id: sessionId, from_user: await myId(), emoji });
       if (error && !error.message.includes("duplicate")) throw new Error(error.message);
     },
     async removeKudos(sessionId, emoji) {
-      const { data: u } = await sb.auth.getUser();
-      check(await sb.from("kudos").delete().eq("session_id", sessionId).eq("from_user", u.user!.id).eq("emoji", emoji));
+      check(await sb.from("kudos").delete().eq("session_id", sessionId).eq("from_user", await myId()).eq("emoji", emoji));
     },
 
     subscribe(userIds, h) {
       const set = new Set(userIds);
-      const ch = sb.channel("db-" + Math.random().toString(36).slice(2))
-        .on("postgres_changes", { event: "*", schema: "public", table: "live_status" }, (p: any) => {
-          const r = p.new && p.new.user_id ? p.new : null;
-          if (r && set.has(r.user_id)) h.onLive(toLive(r));
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, (p: any) => {
-          if (p.eventType === "DELETE") { if (p.old?.id) h.onSession(toSession({ ...p.old, started_at: p.old.started_at || 0, ended_at: p.old.ended_at || 0 }), "delete"); return; }
-          if (set.has(p.new.user_id)) h.onSession(toSession(p.new), "upsert");
-        })
+      const ch = sb.channel("db-" + Math.random().toString(36).slice(2));
+      const onLive = (p: any) => {
+        const r = p.new && p.new.user_id ? p.new : null;
+        if (r && set.has(r.user_id)) h.onLive(toLive(r));
+      };
+      const onSession = (p: any) => { if (p.new && set.has(p.new.user_id)) h.onSession(toSession(p.new), "upsert"); };
+      // filter on the server: only my classmates' changes are sent (Realtime takes at most 100 values per `in` filter)
+      for (let i = 0; i < userIds.length; i += 100) {
+        const filter = `user_id=in.(${userIds.slice(i, i + 100).join(",")})`;
+        ch.on("postgres_changes", { event: "*", schema: "public", table: "live_status", filter }, onLive)
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "sessions", filter }, onSession)
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter }, onSession);
+      }
+      // DELETE events cannot be filtered; with RLS on they only carry the id, and unknown ids are ignored
+      ch.on("postgres_changes", { event: "DELETE", schema: "public", table: "sessions" }, (p: any) => {
+        if (p.old?.id) h.onSession(toSession({ ...p.old, started_at: p.old.started_at || 0, ended_at: p.old.ended_at || 0 }), "delete");
+      })
+        // kudos has no owner column to filter on; RLS already limits it to kudos on my classmates' records
         .on("postgres_changes", { event: "*", schema: "public", table: "kudos" }, (p: any) => {
           if (p.eventType === "DELETE") { if (p.old?.id) h.onKudos(toKudos(p.old), "delete"); return; }
           h.onKudos(toKudos(p.new), "insert");

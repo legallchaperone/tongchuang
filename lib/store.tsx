@@ -5,6 +5,65 @@ import type { Backend } from "./backend/types";
 import type { AuthUser, DailyReview, Kudos, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
+import { byDay, streaks } from "./stats";
+
+/** the first screen only needs recent records (today, this week, last week, the 30-day room heat map) */
+const INITIAL_DAYS = 35;
+/** the data page goes back this far (a year heat map, plus some slack), loaded on demand */
+export const HISTORY_DAYS = 400;
+
+/* ---- local snapshot: show the last known data at once, then refresh in the background ---- */
+const CACHE_V = 1;
+const CACHE_PREFIX = "tc-cache-";
+const cacheKey = (uid: UserId) => `${CACHE_PREFIX}v${CACHE_V}:${uid}`;
+/** characters; localStorage holds ~5M per site and is shared with the focus timer and the demo */
+const CACHE_MAX = 1_500_000;
+interface Snapshot {
+  /** per person: the snapshot holds every record that started at or after this instant */
+  v: number; uid: UserId; at: number; cover: Record<UserId, number>;
+  rooms: Room[]; profiles: Profile[]; subjects: Subject[]; sessions: Session[]; live: LiveStatus[]; kudos: Kudos[];
+}
+function readSnapshot(uid: UserId): Snapshot | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(cacheKey(uid)) || "null") as Snapshot | null;
+    if (!s || s.v !== CACHE_V || s.uid !== uid || !s.cover || !Array.isArray(s.sessions) || Date.now() - s.at > 14 * DAY) return null;
+    return s;
+  } catch { return null; }
+}
+function dropSnapshots(keep?: UserId) {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(CACHE_PREFIX) && k !== (keep && cacheKey(keep))) keys.push(k); }
+    keys.forEach((k) => localStorage.removeItem(k));
+  } catch { /* storage blocked */ }
+}
+function writeSnapshot(snap: Snapshot) {
+  let str = "";
+  try {
+    str = JSON.stringify(snap);
+    // too big (a long own history, many classmates): first keep the recent window only, then the last 10 days
+    for (let i = 0; str.length > CACHE_MAX && i < 2; i++) {
+      const floor = Date.now() - (i ? 10 : INITIAL_DAYS) * DAY;
+      const cover = Object.fromEntries(Object.entries(snap.cover).map(([id, t]) => [id, Math.max(t, floor)]));
+      const sessions = snap.sessions.filter((s) => s.startedAt >= cover[s.userId]);
+      const ids = new Set(sessions.map((s) => s.id));
+      str = JSON.stringify({ ...snap, cover, sessions, kudos: snap.kudos.filter((k) => ids.has(k.sessionId)) });
+    }
+    if (str.length > CACHE_MAX) { localStorage.removeItem(cacheKey(snap.uid)); return; }
+    localStorage.setItem(cacheKey(snap.uid), str);
+  } catch {
+    // quota: drop other accounts' snapshots and try once more
+    try { dropSnapshots(snap.uid); if (str) localStorage.setItem(cacheKey(snap.uid), str); }
+    catch { try { localStorage.removeItem(cacheKey(snap.uid)); } catch { /* ignore */ } }
+  }
+}
+
+const byStartDesc = (a: Session, b: Session) => b.startedAt - a.startedAt;
+/** b wins over a for the same id */
+function mergeSessions(a: Session[], b: Session[]) {
+  const ids = new Set(b.map((s) => s.id));
+  return [...a.filter((s) => !ids.has(s.id)), ...b].sort(byStartDesc);
+}
 
 export interface Toast {
   id: string;
@@ -35,6 +94,10 @@ interface Ctx {
   pushToast(t: Omit<Toast, "id">): void;
   dismissToast(id: string): void;
   reload(): Promise<void>;
+  /** make sure these people's records reach back `days` days (fetches only what is missing, once) */
+  ensureHistory(userIds: UserId[], days: number): Promise<void>;
+  /** older records are being fetched */
+  historyLoading: boolean;
   saveProfile(p: Profile): Promise<void>;
   saveSubject(s: Omit<Subject, "id"> & { id?: string }): Promise<Subject>;
   /** R-019: find my subject by name (case/space-insensitive, un-archiving it) or create it */
@@ -103,7 +166,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [subjectRedirects, setSubjectRedirects] = useState<Record<string, string | null>>({});
   useEffect(() => { try { setSubjectRedirects(JSON.parse(localStorage.getItem(REDIRECTS) || "{}") || {}); } catch { /* */ } }, []);
   const [reviews, setReviews] = useState<DailyReview[]>([]);
+  const [historyBusy, setHistoryBusy] = useState(0);
   const now = useNow(1000);
+  const cacheOn = backend.mode === "supabase"; // the demo already lives in this browser
+  /** per person: records that started at or after this instant are all loaded */
+  const coverRef = useRef<Record<UserId, number>>({});
+  const inflightRef = useRef(new Map<UserId, { since: number; p: Promise<void> }>());
+  /** the account the loaded data belongs to (null when signed out) */
+  const startedFor = useRef<UserId | null>(null);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** the network load has succeeded at least once for this account (only then is a snapshot worth saving) */
+  const syncedRef = useRef(false);
+  const rosterTried = useRef(new Set<UserId>());
+  const rosterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
   const liveRef = useRef(live);
@@ -119,12 +194,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const dismissToast = useCallback((id: string) => setToasts((x) => x.filter((y) => y.id !== id)), []);
 
-  const load = useCallback(async (u: AuthUser) => {
+  const load = useCallback(async (u: AuthUser, background = false): Promise<void> => {
     try {
       const rs = await backend.listRooms();
       const ids = Array.from(new Set([u.id, ...rs.flatMap((r) => r.memberIds)]));
-      const [ps, subs, ss, lv] = await Promise.all([
-        backend.getProfiles(ids), backend.listSubjects(ids), backend.listSessions(ids, Date.now() - 400 * DAY), backend.getLive(ids),
+      const since = Date.now() - INITIAL_DAYS * DAY;
+      const [ps, subs, ss, lv, ks] = await Promise.all([
+        backend.getProfiles(ids), backend.listSubjects(ids), backend.listSessions(ids, since), backend.getLive(ids), backend.listRecentKudos(since),
       ]);
       let mine = ps.find((p) => p.id === u.id);
       const tz = browserTz();
@@ -134,24 +210,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ps.push(mine);
       } else if (mine.tz !== tz) {
         mine = { ...mine, tz };
-        await backend.saveProfile(mine);
+        backend.saveProfile(mine).catch(() => {}); // nothing waits on this
         ps.splice(ps.findIndex((p) => p.id === u.id), 1, mine);
       }
-      const recentIds = ss.filter((s) => s.startedAt > Date.now() - 60 * DAY).map((s) => s.id);
-      const ks = await backend.listKudos(recentIds);
+      if (startedFor.current !== u.id) return; // signed out meanwhile
+      const idSet = new Set(ids);
+      const cover: Record<UserId, number> = {};
+      ids.forEach((id) => { cover[id] = Math.min(coverRef.current[id] ?? since, since); });
+      coverRef.current = cover;
       setRooms(rs);
       setProfiles(Object.fromEntries(ps.map((p) => [p.id, p])));
       setSubjects(subs);
-      setSessions(ss.sort((a, b) => b.startedAt - a.startedAt));
+      // older records fetched for the data page stay; the recent window is replaced
+      setSessions((list) => mergeSessions(list.filter((s) => s.startedAt < since && idSet.has(s.userId)), ss));
       setLiveMap(Object.fromEntries(lv.map((l) => [l.userId, l])));
       setKudos(ks);
+      syncedRef.current = true;
       setStatus("ready");
       setError(null);
     } catch (e) {
+      if (startedFor.current !== u.id) return;
       setError((e as Error).message);
-      setStatus("error");
+      if (!background) { setStatus("error"); return; }
+      // the page is already showing (saved) data: keep it, say so, try again once
+      pushToast({ title: "暂时连不上服务器", body: "显示的可能不是最新数据，稍后自动重试" });
+      if (!retryRef.current) retryRef.current = setTimeout(() => { retryRef.current = null; if (startedFor.current === u.id) load(u, true); }, 20_000);
     }
-  }, [backend]);
+  }, [backend, pushToast]);
+
+  /** first data for a freshly known account: the saved snapshot right away, then the network */
+  const start = useCallback((u: AuthUser) => {
+    if (startedFor.current === u.id) return; // currentUser() and the auth event both report the same sign-in
+    startedFor.current = u.id;
+    syncedRef.current = false;
+    coverRef.current = {};
+    inflightRef.current.clear();
+    const snap = cacheOn ? readSnapshot(u.id) : null;
+    if (snap) {
+      setRooms(snap.rooms);
+      setProfiles(Object.fromEntries(snap.profiles.map((p) => [p.id, p])));
+      setSubjects(snap.subjects);
+      setSessions([...snap.sessions].sort(byStartDesc));
+      setLiveMap(Object.fromEntries(snap.live.map((l) => [l.userId, l])));
+      setKudos(snap.kudos);
+      [u.id, ...snap.rooms.flatMap((r) => r.memberIds)].forEach((id) => { if (snap.cover[id] != null) coverRef.current[id] = snap.cover[id]; });
+      setStatus("ready");
+    } else setStatus("loading");
+    load(u, !!snap);
+  }, [load, cacheOn]);
+
+  const signedOut = useCallback(() => {
+    startedFor.current = null;
+    coverRef.current = {};
+    inflightRef.current.clear();
+    if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
+    dropSnapshots();
+    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]);
+    setStatus("signedOut");
+  }, []);
 
   // auth
   useEffect(() => {
@@ -159,17 +275,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     backend.currentUser().then((u) => {
       if (!alive) return;
       setMe(u);
-      if (u) load(u); else setStatus("signedOut");
+      if (u) start(u); else signedOut();
     });
     const off = backend.onAuthChange((u) => {
-      setMe((prev) => {
-        if (u && prev?.id !== u.id) { setStatus("loading"); load(u); }
-        if (!u) setStatus("signedOut");
-        return u;
-      });
+      setMe((prev) => (prev?.id === u?.id ? prev : u));
+      if (u) start(u); else signedOut();
     });
     return () => { alive = false; off(); };
-  }, [backend, load]);
+  }, [backend, start, signedOut]);
+
+  const ensureHistory = useCallback(async (userIds: UserId[], days: number) => {
+    const since = Date.now() - (days + 2) * DAY; // +2: the oldest day in any time zone, and records that cross midnight
+    const waits: Promise<void>[] = [];
+    const need: UserId[] = [];
+    let until = 0;
+    for (const id of userIds) {
+      const cov = coverRef.current[id];
+      if (cov == null || cov <= since) continue;
+      const f = inflightRef.current.get(id);
+      if (f && f.since <= since) { waits.push(f.p); continue; }
+      need.push(id);
+      until = Math.max(until, Math.min(cov, f ? f.since : cov)); // what is already loaded or on its way is not asked for again
+    }
+    if (need.length) {
+      const owner = startedFor.current;
+      const p = (async () => {
+        setHistoryBusy((n) => n + 1);
+        try {
+          const ss = await backend.listSessions(need, since, until);
+          if (startedFor.current !== owner) return;
+          need.forEach((id) => { if (coverRef.current[id] != null) coverRef.current[id] = Math.min(coverRef.current[id], since); });
+          setSessions((list) => mergeSessions(list, ss));
+        } catch (e) {
+          pushToast({ title: "更早的记录没加载出来", body: (e as Error).message });
+        } finally {
+          setHistoryBusy((n) => n - 1);
+          need.forEach((id) => { if (inflightRef.current.get(id)?.p === p) inflightRef.current.delete(id); });
+        }
+      })();
+      need.forEach((id) => inflightRef.current.set(id, { since, p }));
+      waits.push(p);
+    }
+    await Promise.all(waits);
+  }, [backend, pushToast]);
 
   const peopleIds = useMemo(() => {
     if (!me) return [];
@@ -177,7 +325,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     rooms.forEach((r) => r.memberIds.forEach((m) => ids.add(m)));
     return Array.from(ids).sort((a, b) => (a === me.id ? -1 : b === me.id ? 1 : (profiles[a]?.name || "").localeCompare(profiles[b]?.name || "")));
   }, [me, rooms, profiles]);
-  const idsKey = peopleIds.join(",");
+  const idsKey = [...peopleIds].sort().join(",");
   const roomKey = rooms.map((r) => r.id).join(",");
 
   // realtime
@@ -209,7 +357,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       },
     });
-    const offP = backend.presence(me.id, roomKey.split(",").filter(Boolean), setOnline);
+    const known = new Set(ids);
+    const offP = backend.presence(me.id, roomKey.split(",").filter(Boolean), (on) => {
+      setOnline(on);
+      // someone new joined one of my rooms: fetch the roster again, which also resubscribes with them in the filter
+      const fresh = Array.from(on).filter((id) => !known.has(id) && !rosterTried.current.has(id));
+      if (!fresh.length) return;
+      fresh.forEach((id) => rosterTried.current.add(id));
+      if (!rosterTimer.current) rosterTimer.current = setTimeout(() => { rosterTimer.current = null; if (startedFor.current === me.id) load(me, true); }, 1500);
+    });
     const offS = backend.onSignal(me.id, (s) => {
       const p = profilesRef.current[s.from];
       const name = p?.name || "同窗";
@@ -221,7 +377,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return () => { off(); offP(); offS(); };
-  }, [status, me, idsKey, roomKey, backend, pushToast]);
+  }, [status, me, idsKey, roomKey, backend, pushToast, load]);
 
   /** R-019: drop a subject locally and repoint my records at `to` (null = uncategorized) */
   const redirectSubject = (from: string, to: string | null) => {
@@ -246,11 +402,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; off(); };
   }, [status, me, idsKey, backend]);
 
-  const reload = useCallback(async () => { if (me) await load(me); }, [me, load]);
+  // a streak that reaches back to the oldest loaded day may be longer: fetch my older records, doubling each time
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    const tz = profiles[me.id]?.tz;
+    const cov = coverRef.current[me.id];
+    if (!tz || cov == null) return;
+    const have = Math.floor((Date.now() - cov) / DAY);
+    if (have >= HISTORY_DAYS) return;
+    const st = streaks(byDay(sessions.filter((s) => s.userId === me.id), tz), tz);
+    if (st.current >= have - 2) ensureHistory([me.id], Math.min(HISTORY_DAYS, have * 2));
+  }, [status, me, sessions, profiles, ensureHistory]);
+
+  // keep a snapshot of the recent data for the next visit
+  const snapshot = useCallback((): Snapshot | null => {
+    if (!cacheOn || status !== "ready" || !me || startedFor.current !== me.id || !syncedRef.current) return null;
+    // classmates: the recent window; me: whatever is loaded (a long streak then shows right away next time)
+    const floor = Date.now() - INITIAL_DAYS * DAY;
+    const cover: Record<UserId, number> = {};
+    for (const [id, t] of Object.entries(coverRef.current)) cover[id] = id === me.id ? t : Math.max(t, floor);
+    const recent = sessions.filter((s) => cover[s.userId] != null && s.startedAt >= cover[s.userId]);
+    const sids = new Set(recent.map((s) => s.id));
+    return {
+      v: CACHE_V, uid: me.id, at: Date.now(), cover, rooms, profiles: Object.values(profiles), subjects, sessions: recent,
+      live: Object.values(live), kudos: kudos.filter((k) => sids.has(k.sessionId) && !k.id.startsWith("tmp-")),
+    };
+  }, [cacheOn, status, me, rooms, profiles, subjects, sessions, live, kudos]);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  useEffect(() => {
+    const t = setTimeout(() => { const s = snapshot(); if (s) writeSnapshot(s); }, 2000);
+    return () => clearTimeout(t);
+  }, [snapshot]);
+  useEffect(() => {
+    const flush = () => { const s = snapshotRef.current(); if (s) writeSnapshot(s); };
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", onHide); };
+  }, []);
+
+  const reload = useCallback(async () => { if (me) await load(me, status === "ready"); }, [me, load, status]);
 
   const value: Ctx = {
     backend, status, error, me, myProfile: me ? profiles[me.id] || null : null, profiles, peopleIds, subjects, rooms, sessions, live, kudos, online, toasts, now,
-    pushToast, dismissToast, reload,
+    pushToast, dismissToast, reload, ensureHistory, historyLoading: historyBusy > 0,
     async saveProfile(p) { await backend.saveProfile(p); setProfiles((m) => ({ ...m, [p.id]: p })); },
     async saveSubject(s) { const r = await backend.saveSubject(s); setSubjects((l) => [...l.filter((x) => x.id !== r.id), r]); return r; },
     async ensureSubject(name) {
@@ -344,7 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
-    async signOut() { await backend.signOut(); },
+    async signOut() { dropSnapshots(); await backend.signOut(); },
     reviews,
     async saveReview(r) {
       if (!me) throw new Error("还没登录");

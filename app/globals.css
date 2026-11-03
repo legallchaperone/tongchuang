@@ -801,3 +801,8 @@ button.st-line.add { color: var(--ink-3); }
 .rtrend .chart svg { shape-rendering: crispEdges; }
 .rtrend-note { padding: 4px 10px; background: var(--panel-2); color: var(--ink-2); }
 .rtrend-note b { color: var(--ink); font-weight: 400; background: var(--lamp-soft); padding: 0 2px; }
+
+/* ---- R-013 ---- */
+/* older records are loading on the data page: say so, and dim the numbers that are still filling in */
+.r013-loading { color: var(--ink-3); animation: blink 1.2s steps(2) infinite; }
+.page[aria-busy="true"] .tiles, .page[aria-busy="true"] .card { opacity: .65; transition: opacity .2s; }

@@ -1,6 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
-import { useApp } from "@/lib/store";
+import { useEffect, useMemo, useState } from "react";
+import { HISTORY_DAYS, useApp } from "@/lib/store";
 import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, summarize, touching, withLive, yearGrid } from "@/lib/stats";
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
@@ -30,6 +30,15 @@ export default function StatsPage() {
   const now = app.now;
   const minute = Math.floor(now / 60000);
   const isMe = who === app.me!.id;
+
+  // the first screen only loads recent records: fetch the year (heat map, streaks, previous period) for the person shown,
+  // and the selected range for everyone in the comparison
+  const { ensureHistory, peopleIds } = app;
+  const othersKey = peopleIds.filter((id) => id !== who).join(",");
+  useEffect(() => { ensureHistory([who], HISTORY_DAYS); }, [ensureHistory, who]);
+  useEffect(() => { if (othersKey) ensureHistory(othersKey.split(","), range); }, [ensureHistory, othersKey, range]);
+  // no "vs previous period" while that period is still loading
+  const delta = (a: number, b: number) => (app.historyLoading ? null : pctDelta(a, b));
 
   const all = useMemo(() => withLive(app.sessions, p.id, app.live[p.id], tz, now), [app.sessions, p.id, app.live, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
   const subjects = app.subjects.filter((s) => s.userId === p.id);
@@ -83,9 +92,9 @@ export default function StatsPage() {
   const history = historyAll.slice(0, more ? 200 : 15);
 
   return (
-    <div className="page">
+    <div className="page" aria-busy={app.historyLoading || undefined}>
       <div className="pagehead">
-        <div><h1>数据</h1><p className="sub">按{isMe ? "你" : p.name}的当地日期统计 · {tz}</p></div>
+        <div><h1>数据</h1><p className="sub">按{isMe ? "你" : p.name}的当地日期统计 · {tz}{app.historyLoading && <span className="r013-loading" role="status"> · 正在加载更早的记录…</span>}</p></div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {app.peopleIds.length > 1 && (
             <div className="seg" role="group" aria-label="查看谁的数据">
@@ -99,11 +108,11 @@ export default function StatsPage() {
       </div>
 
       <div className="tiles">
-        <div className="tile"><div className="k">总专注</div><div className="v">{hrs(cur.totalMs)}<small style={{ fontSize: 14 }}>h</small></div><Delta v={pctDelta(cur.totalMs, prev.totalMs)} /></div>
-        <div className="tile"><div className="k">日均</div><div className="v">{durShort(cur.avgDayMs)}</div><Delta v={pctDelta(cur.avgDayMs, prev.avgDayMs)} /></div>
+        <div className="tile"><div className="k">总专注</div><div className="v">{hrs(cur.totalMs)}<small style={{ fontSize: 14 }}>h</small></div><Delta v={delta(cur.totalMs, prev.totalMs)} /></div>
+        <div className="tile"><div className="k">日均</div><div className="v">{durShort(cur.avgDayMs)}</div><Delta v={delta(cur.avgDayMs, prev.avgDayMs)} /></div>
         <div className="tile"><div className="k">学习天数</div><div className="v">{cur.activeDays}<small style={{ fontSize: 14 }}>/{cur.days}</small></div><div className="d muted">达标 {cur.goalDays} 天</div></div>
-        <div className="tile"><div className="k">专注次数</div><div className="v">{cur.sessions}</div><Delta v={pctDelta(cur.sessions, prev.sessions)} /></div>
-        <div className="tile"><div className="k">平均专注度</div><div className="v">{cur.avgRating ? cur.avgRating.toFixed(1) : "—"}<small style={{ fontSize: 14 }}>/5</small></div><div className="d muted">{prev.avgRating ? `上期 ${prev.avgRating.toFixed(1)}` : "结束时自评"}</div></div>
+        <div className="tile"><div className="k">专注次数</div><div className="v">{cur.sessions}</div><Delta v={delta(cur.sessions, prev.sessions)} /></div>
+        <div className="tile"><div className="k">平均专注度</div><div className="v">{cur.avgRating ? cur.avgRating.toFixed(1) : "—"}<small style={{ fontSize: 14 }}>/5</small></div><div className="d muted">{prev.avgRating && !app.historyLoading ? `上期 ${prev.avgRating.toFixed(1)}` : "结束时自评"}</div></div>
         <div className="tile"><div className="k">连续学习</div><div className="v">{st.current}<small style={{ fontSize: 14 }}> 天</small></div><div className="d muted">最长 {st.best} 天</div></div>
       </div>
 
@@ -115,7 +124,7 @@ export default function StatsPage() {
       </section>
 
       <section className="card">
-        <div className="cardhead"><h2>一年</h2><span className="hint">{Array.from(daily.keys()).filter((k) => k >= grid[0][0].key).length} 天有记录</span>{isMe && <ShareYearButton />}</div>
+        <div className="cardhead"><h2>一年</h2><span className="hint">{Array.from(daily.keys()).filter((k) => k >= grid[0][0].key).length} 天有记录</span>{isMe && !app.historyLoading && <ShareYearButton />}</div>
         <div className="cardbody"><Heatmap cols={grid} /></div>
       </section>
 

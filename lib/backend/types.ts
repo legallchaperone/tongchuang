@@ -37,7 +37,8 @@ export interface Backend {
   leaveRoom(roomId: string): Promise<void>;
 
   // sessions
-  listSessions(userIds: UserId[], sinceMs: number): Promise<Session[]>;
+  /** sessions that started in [sinceMs, untilMs) — untilMs omitted means up to now */
+  listSessions(userIds: UserId[], sinceMs: number, untilMs?: number): Promise<Session[]>;
   addSession(s: Omit<Session, "id">): Promise<Session>;
   updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId" | "durationMs" | "endedAt">>): Promise<void>;
   deleteSession(id: string): Promise<void>;
@@ -48,6 +49,8 @@ export interface Backend {
 
   // kudos
   listKudos(sessionIds: string[]): Promise<Kudos[]>;
+  /** every kudos I can see that was given since sinceMs (RLS limits it to my classmates' records); one request */
+  listRecentKudos(sinceMs: number): Promise<Kudos[]>;
   addKudos(sessionId: string, emoji: string): Promise<void>;
   removeKudos(sessionId: string, emoji: string): Promise<void>;
 
