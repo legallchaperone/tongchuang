@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { LiveStatus, Profile } from "@/lib/types";
-import { defaultLook, drawScene, portrait, SCENE_H, SCENE_W, SHIRTS, type AvatarLook } from "@/lib/pixel";
+import { defaultLook, drawScene, pick, portrait, SCENE_H, SCENE_W, SHIRTS, type AvatarLook } from "@/lib/pixel";
 import { partsIn, phaseAt } from "@/lib/time";
 
 /* one shared animation clock (~6 fps) */
@@ -15,8 +15,8 @@ function subscribe(cb: () => void) {
 }
 export const useFrame = () => useSyncExternalStore(subscribe, () => frame, () => 0);
 
-export const lookOf = (p?: Profile | null): AvatarLook => (p?.look ?? defaultLook(p?.id || "x"));
-export const shirtOf = (p?: Profile | null) => SHIRTS[((p?.color ?? 0) % 8 + 8) % 8];
+export const lookOf = (p?: Profile | null): AvatarLook => (p?.look && typeof p.look === "object" ? { ...defaultLook(p.id), ...p.look } : defaultLook(p?.id || "x"));
+export const shirtOf = (p?: Profile | null) => pick(SHIRTS, p?.color);
 
 function seedOf(id: string) { let h = 7; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
 

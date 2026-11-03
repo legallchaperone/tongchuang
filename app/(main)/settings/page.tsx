@@ -7,6 +7,7 @@ import { Avatar, seriesVar } from "@/components/bits";
 import { resetDemo } from "@/lib/backend/demo";
 import type { Profile } from "@/lib/types";
 import { CharacterEditor } from "@/components/CharacterEditor";
+import { NumberField } from "@/components/NumberField";
 import Link from "next/link";
 import { APP_VERSION, BUILD_ID, CHANGELOG } from "@/lib/version";
 
@@ -62,11 +63,11 @@ export default function SettingsPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div className="field">
             <label className="label" htmlFor="set-pomo">默认番茄时长（分）</label>
-            <input id="set-pomo" className="input num" type="number" min={5} max={180} value={p.pomodoroMin} onChange={(e) => setP({ ...p, pomodoroMin: Math.max(5, Math.min(180, +e.target.value || 25)) })} />
+            <NumberField id="set-pomo" min={5} max={180} value={p.pomodoroMin} onCommit={(v) => setP({ ...p, pomodoroMin: v })} />
           </div>
           <div className="field">
             <label className="label" htmlFor="set-break">休息时长（分）</label>
-            <input id="set-break" className="input num" type="number" min={1} max={60} value={p.breakMin} onChange={(e) => setP({ ...p, breakMin: Math.max(1, Math.min(60, +e.target.value || 5)) })} />
+            <NumberField id="set-break" min={1} max={60} value={p.breakMin} onCommit={(v) => setP({ ...p, breakMin: v })} />
           </div>
         </div>
       </section>

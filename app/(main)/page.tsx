@@ -5,11 +5,11 @@ import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { byDay, dailyBySubject, streaks, weekRange, withLive } from "@/lib/stats";
 import { dayKey, dur, hrs, MIN, partsIn, weekdayCn } from "@/lib/time";
-import { Ring } from "@/components/bits";
+import { Ring, seriesVar } from "@/components/bits";
 import { StartPanel } from "@/components/StartPanel";
 import { Feed } from "@/components/People";
 import { StudyHall } from "@/components/Hall";
-import { DailyBars } from "@/components/Charts";
+import { DailyBars, foldSlices, PixelDonut } from "@/components/Charts";
 import { IPlay } from "@/components/Icons";
 
 function greeting(h: number) {
@@ -39,6 +39,14 @@ export default function TodayPage() {
   const lastWeekSamePoint = weekRange(tz, now, 1).slice(0, wd + 1).reduce((a, k) => a + (daily.get(k) || 0), 0);
   const weekRows = useMemo(() => dailyBySubject(mineAll, tz, week), [mineAll, tz, week.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const mySubjects = app.subjects.filter((s) => s.userId === meId);
+  const weekSlices = useMemo(() => {
+    const m = new Map<string | null, number>();
+    weekRows.forEach((r) => r.parts.forEach((v, k) => m.set(k, (m.get(k) || 0) + v)));
+    return foldSlices(Array.from(m).map(([id, ms]) => {
+      const sub = mySubjects.find((x) => x.id === id);
+      return { key: String(id), name: sub?.name || "未分类", label: sub?.name || "未分类", ms, color: sub ? seriesVar(sub.color) : "var(--ink-3)" };
+    }));
+  }, [weekRows, mySubjects]);
   const p = partsIn(now, tz);
   const focusing = focus.state && focus.state.phase !== "breakDone";
   const others = app.peopleIds.filter((id) => id !== meId);
@@ -117,6 +125,14 @@ export default function TodayPage() {
           <section className="card" style={{ order: 5 }}>
             <div className="cardhead" style={{ paddingBottom: 10 }}><h2>动态</h2><span className="hint">给认真的人点个赞</span></div>
             <Feed userIds={app.peopleIds} limit={12} />
+          </section>
+          <section className="card" style={{ order: 6 }}>
+            <div className="cardhead"><h2>本周科目</h2><Link className="hint" href="/stats">按科目看 →</Link></div>
+            <div className="cardbody">
+              {weekSlices.length
+                ? <PixelDonut items={weekSlices} size={168} />
+                : <p className="muted">本周还没有专注记录。开始专注时选一个科目，这里会按科目画出时间分布。</p>}
+            </div>
           </section>
         </div>
       </div>

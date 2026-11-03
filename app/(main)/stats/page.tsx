@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, summarize, touching, withLive, yearGrid } from "@/lib/stats";
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
-import { DailyBars, HBars, Heatmap, HourChart } from "@/components/Charts";
+import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
 import type { Session, UserId } from "@/lib/types";
 
@@ -132,7 +132,7 @@ export default function StatsPage() {
         <section className="card">
           <div className="cardhead"><h2>科目分布</h2></div>
           <div className="cardbody">
-            {subj.length ? <HBars items={subj.map((x) => ({ key: String(x.id), label: <><span className="dot" style={{ background: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" }} />{x.subject?.name || "未分类"}</>, ms: x.ms, color: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" }))} /> : <p className="muted">暂无数据</p>}
+            {subj.length ? <PixelDonut items={foldSlices(subj.map((x) => ({ key: String(x.id), name: x.subject?.name || "未分类", label: x.subject?.name || "未分类", ms: x.ms, color: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" })))} /> : <p className="muted">暂无数据</p>}
           </div>
         </section>
         <section className="card">

@@ -87,7 +87,7 @@ function Login() {
           {SAMPLE.map((x) => (
             <div key={x.p.id} className="card" style={{ minWidth: 0 }}>
               <DeskScene p={x.p} live={{ userId: x.p.id, state: x.state, task: "", subjectName: "", subjectColor: null, mode: "pomodoro", startedAt: 0, plannedEnd: null, accumulatedMs: 0, runningSince: 0, updatedAt: 0 }} present={x.state !== "idle"} maxScale={3} />
-              <div style={{ color: "var(--ink)", padding: "4px 4px 0", display: "flex", justifyContent: "space-between" }}><span>{x.city}</span><span className="num">{hhmm(app.now, x.p.tz)}</span></div>
+              <div style={{ color: "var(--ink)", padding: "4px 4px 0", display: "flex", justifyContent: "space-between" }}><span>{x.city}</span><span className="num" suppressHydrationWarning>{hhmm(app.now, x.p.tz)}</span></div>
             </div>
           ))}
         </div>

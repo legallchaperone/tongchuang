@@ -45,13 +45,18 @@ function Section({ id, kicker, title, lead, children }: { id: string; kicker: st
 export function Landing() {
   const app = useApp();
   const signedIn = app.status === "ready";
+  // the server renders without a clock; real times appear once the page is running in the browser
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const now = app.now;
+  const t = (ms: number, tz: string) => (mounted ? hhmm(ms, tz) : "--:--");
   const cta = signedIn ? { href: "/", label: "进入我的书房" } : { href: "/login", label: "免费开始" };
 
   /* time-travel demo: hour of the viewer's day */
   const viewerTz = CAST[0].tz;
   const day0 = useMemo(() => startOfDay(Date.now(), viewerTz), [viewerTz]);
-  const [hour, setHour] = useState(() => partsIn(Date.now(), viewerTz).h);
+  const [hour, setHour] = useState(21);
+  useEffect(() => { setHour(partsIn(Date.now(), viewerTz).h); }, [viewerTz]);
   const [playing, setPlaying] = useState(false);
   useEffect(() => {
     if (!playing) return;
@@ -115,11 +120,11 @@ export function Landing() {
         </div>
         <div className="lp-hero-desks">
           {CAST.map((p) => {
-            const st = stateAt(p.tz, now);
+            const st = mounted ? stateAt(p.tz, now) : "idle";
             return (
               <figure key={p.id} className="card lp-desk">
                 <DeskScene p={p} live={live(p.id, st)} present={st !== "idle"} maxScale={3} />
-                <figcaption><b>{tzCity(p.tz)}</b><span className="num">{hhmm(now, p.tz)}</span><span className={`state-pill ${st}`}>{stateText[st]}</span></figcaption>
+                <figcaption><b>{tzCity(p.tz)}</b><span className="num">{t(now, p.tz)}</span><span className={`state-pill ${st}`}>{stateText[st]}</span></figcaption>
               </figure>
             );
           })}

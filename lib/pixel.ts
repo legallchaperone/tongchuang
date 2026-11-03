@@ -23,9 +23,15 @@ function hash(s: string) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
+/** safe index into a palette: works for negative, fractional or missing values */
+export function pick<T>(arr: readonly T[], i: unknown): T {
+  const n = Math.floor(Number(i));
+  return arr[Number.isFinite(n) ? ((n % arr.length) + arr.length) % arr.length : 0];
+}
+
 export function defaultLook(id: string): AvatarLook {
   const h = hash(id);
-  return { skin: h % 4, hair: (h >> 3) % HAIR_STYLES.length, hairColor: (h >> 7) % 4 };
+  return { skin: h % 4, hair: (h >>> 3) % HAIR_STYLES.length, hairColor: (h >>> 7) % 4 };
 }
 
 export function shade(hex: string, amt: number) {
@@ -166,8 +172,8 @@ export interface CharOpts { look: AvatarLook; shirt: string; pose: "sit" | "stan
 
 /** full character grid (16 x 16 seated, 16 x 26 standing), with a 1px outline margin */
 export function character({ look, shirt, pose, blink }: CharOpts): Grid {
-  const skin = SKINS[look.skin % SKINS.length];
-  const hair = HAIR_COLORS[look.hairColor % HAIR_COLORS.length];
+  const skin = pick(SKINS, look.skin);
+  const hair = pick(HAIR_COLORS, look.hairColor);
   const colors: Record<string, string | null> = {
     S: skin, s: shade(skin, -0.18), E: blink ? shade(skin, -0.35) : "#2a1a14", p: mix(skin, "#f08a8a", 0.35),
     B: shirt, b: shade(shirt, -0.22), W: "#fbf4e2", H: hair, h: shade(hair, -0.25), P: "#3d4a6b", F: "#2a1a14",
@@ -176,7 +182,7 @@ export function character({ look, shirt, pose, blink }: CharOpts): Grid {
   const g = blank(16, HEAD.length + body.length + 1);
   stamp(g, HEAD, 0, 0, colors);
   stamp(g, body, 0, HEAD.length, colors);
-  stamp(g, HAIR_STYLES[look.hair % HAIR_STYLES.length], 0, 0, colors);
+  stamp(g, pick(HAIR_STYLES, look.hair), 0, 0, colors);
   return outline(g);
 }
 
@@ -389,7 +395,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   }
   // hands writing
   if (seated) {
-    const skin = SKINS[o.look.skin % SKINS.length];
+    const skin = pick(SKINS, o.look.skin);
     const hx = o.state === "focus" ? 49 + (o.frame % 4 < 2 ? 0 : 2) : 49;
     rect(ctx, 42, 50, 3, 2, OUTLINE); rect(ctx, 43, 50, 2, 1, skin);
     rect(ctx, hx, 50, 3, 2, OUTLINE); rect(ctx, hx, 50, 2, 1, skin);

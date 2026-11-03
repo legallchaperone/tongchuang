@@ -234,3 +234,70 @@ function OverlapText({ spans }: { spans: [number, number][] }) {
     </p>
   ), [spans, total]);
 }
+
+/* ───────── pixel donut: part-to-whole, values printed in the legend ───────── */
+export interface Slice { key: string; label: React.ReactNode; name: string; ms: number; color: string }
+
+/** keep the 5 largest parts and fold the rest into "其他" so the ring never has more than 6 segments */
+export function foldSlices(items: Slice[], max = 6): Slice[] {
+  const sorted = [...items].filter((i) => i.ms > 0).sort((a, b) => b.ms - a.ms);
+  if (sorted.length <= max) return sorted;
+  const head = sorted.slice(0, max - 1);
+  const rest = sorted.slice(max - 1).reduce((a, s) => a + s.ms, 0);
+  return [...head, { key: "__other", label: "其他", name: "其他", ms: rest, color: "var(--ink-3)" }];
+}
+
+export function PixelDonut({ items, size = 200 }: { items: Slice[]; size?: number }) {
+  const [hover, setHover] = useState<string | null>(null);
+  const N = 28; // grid cells per side
+  const total = items.reduce((a, s) => a + s.ms, 0) || 1;
+  // cumulative angle boundaries, clockwise from 12 o'clock
+  const bounds = useMemo(() => {
+    let acc = 0;
+    return items.map((s) => { const a0 = acc; acc += s.ms / total; return { key: s.key, a0, a1: acc, color: s.color }; });
+  }, [items, total]);
+  const cells = useMemo(() => {
+    const out: { x: number; y: number; key: string; color: string }[] = [];
+    const c = (N - 1) / 2, rOut = N / 2 - 0.4, rIn = N / 2 - 7.2;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const dx = x - c, dy = y - c, r = Math.hypot(dx, dy);
+      if (r > rOut || r < rIn) continue;
+      const a = ((Math.atan2(dx, -dy) / (2 * Math.PI)) + 1) % 1;
+      const b = bounds.find((s) => a >= s.a0 && a < s.a1) || bounds[bounds.length - 1];
+      if (!b) continue;
+      // one cell of gap at each boundary (when there is more than one slice)
+      const edge = bounds.length > 1 && Math.min(a - b.a0, b.a1 - a) * 2 * Math.PI * r < 0.55;
+      if (edge) continue;
+      out.push({ x, y, key: b.key, color: b.color });
+    }
+    return out;
+  }, [bounds]);
+  const hv = items.find((s) => s.key === hover);
+  return (
+    <div className="donut">
+      <div className="donut-ring" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${N} ${N}`} width={size} height={size} shapeRendering="crispEdges" role="img"
+          aria-label={items.map((s) => `${s.name} ${Math.round((s.ms / total) * 100)}%`).join("，")}>
+          {cells.map((c) => (
+            <rect key={`${c.x}-${c.y}`} x={c.x} y={c.y} width={1} height={1} fill={c.color}
+              opacity={hover && hover !== c.key ? 0.35 : 1} onMouseEnter={() => setHover(c.key)} />
+          ))}
+        </svg>
+        <div className="donut-center">
+          {hv ? <><b className="num">{Math.round((hv.ms / total) * 100)}%</b><span>{hv.name}</span></>
+            : <><b className="num">{durShort(total)}</b><span>合计</span></>}
+        </div>
+      </div>
+      <ul className="donut-legend">
+        {items.map((s) => (
+          <li key={s.key} className={hover === s.key ? "on" : ""} onMouseEnter={() => setHover(s.key)} onMouseLeave={() => setHover(null)}>
+            <i style={{ background: s.color }} />
+            <span className="nm">{s.label}</span>
+            <span className="num pct">{Math.round((s.ms / total) * 100)}%</span>
+            <span className="num v">{durShort(s.ms)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

@@ -34,13 +34,13 @@ export default function RoomsPage() {
       </div>
 
       {app.rooms.length > 0 && (
-        <div className="desks">
+        <div className="roomgrid">
           {app.rooms.map((r) => {
             const focusing = r.memberIds.filter((m) => app.live[m]?.state === "focus").length;
             return (
-              <Link key={r.id} href={`/rooms/${r.id}`} className="card desk" style={{ gap: 14 }}>
+              <Link key={r.id} href={`/rooms/${r.id}`} className="card roomcard">
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                  <h2 style={{ fontSize: 17 }}>{r.name}</h2>
+                  <h2>{r.name}</h2>
                   {focusing > 0 && <span className="state-pill focus">{focusing} 人专注中</span>}
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
