@@ -5,6 +5,7 @@ import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, 
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
+import { ShareYearButton } from "@/components/ShareCard";
 import type { Session, UserId } from "@/lib/types";
 
 const RANGES = [7, 30, 90, 365] as const;
@@ -113,7 +114,7 @@ export default function StatsPage() {
       </section>
 
       <section className="card">
-        <div className="cardhead"><h2>一年</h2><span className="hint">{Array.from(daily.keys()).filter((k) => k >= grid[0][0].key).length} 天有记录</span></div>
+        <div className="cardhead"><h2>一年</h2><span className="hint">{Array.from(daily.keys()).filter((k) => k >= grid[0][0].key).length} 天有记录</span>{isMe && <ShareYearButton />}</div>
         <div className="cardbody"><Heatmap cols={grid} /></div>
       </section>
 
