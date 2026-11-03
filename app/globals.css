@@ -533,3 +533,8 @@ table td, table th { line-height: 20px; }
 table tr + tr { border-top: 2px dashed var(--slot) !important; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---- R-013 ---- */
+/* older records are loading on the data page: say so, and dim the numbers that are still filling in */
+.r013-loading { color: var(--ink-3); animation: blink 1.2s steps(2) infinite; }
+.page[aria-busy="true"] .tiles, .page[aria-busy="true"] .card { opacity: .65; transition: opacity .2s; }

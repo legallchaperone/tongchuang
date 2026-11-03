@@ -22,6 +22,16 @@ export function withLive(sessions: Session[], userId: UserId, l: LiveStatus | un
  * in proportion to the wall-clock time on each side (pauses are spread evenly).
  */
 export function dayShares(s: Session, tz: string): [string, number][] {
+  // the pages recompute this for every record on every clock tick; dayKey() is an Intl call, so remember the answer
+  const c = sharesCache.get(s);
+  if (c && c.tz === tz && c.a === s.startedAt && c.b === s.endedAt && c.d === s.durationMs) return c.v;
+  const v = computeDayShares(s, tz);
+  sharesCache.set(s, { tz, a: s.startedAt, b: s.endedAt, d: s.durationMs, v });
+  return v;
+}
+const sharesCache = new WeakMap<Session, { tz: string; a: number; b: number; d: number; v: [string, number][] }>();
+
+function computeDayShares(s: Session, tz: string): [string, number][] {
   const k0 = dayKey(s.startedAt, tz);
   const end = Math.max(s.startedAt, s.endedAt);
   if (dayKey(Math.max(s.startedAt, end - 1), tz) === k0) return [[k0, s.durationMs]];
