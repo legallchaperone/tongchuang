@@ -1,0 +1,9 @@
+{
+  "name": "同窗 · 跨时区自习",
+  "short_name": "同窗",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0E1116",
+  "theme_color": "#0E1116",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
