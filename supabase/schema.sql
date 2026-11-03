@@ -209,3 +209,29 @@ do $$ begin
   begin alter publication supabase_realtime add table public.sessions; exception when others then null; end;
   begin alter publication supabase_realtime add table public.kudos; exception when others then null; end;
 end $$;
+
+-- ───────────── R-019 删除与合并科目 ─────────────
+-- 把重复科目 from_id 下的所有记录挪到 to_id，然后删掉 from_id；返回挪动的记录数。
+-- 两个科目都必须属于当前用户。guard_session_edit 只限制时长/时间/归属，不拦 subject_id。
+-- 删除科目本身走普通 delete（RLS “subjects write own”），sessions.subject_id 为 on delete set null，记录变成未分类。
+create or replace function public.merge_subject(from_id uuid, to_id uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare n integer;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  if from_id = to_id then raise exception 'cannot merge a subject into itself'; end if;
+  -- lock both rows so concurrent merges of the same pair serialize
+  perform 1 from subjects where id in (from_id, to_id) and user_id = auth.uid() for update;
+  if not exists (select 1 from subjects where id = to_id and user_id = auth.uid()) then
+    raise exception 'subject not found';
+  end if;
+  if not exists (select 1 from subjects where id = from_id and user_id = auth.uid()) then
+    return 0; -- already merged (idempotent retry)
+  end if;
+  update sessions set subject_id = to_id where subject_id = from_id and user_id = auth.uid();
+  get diagnostics n = row_count;
+  delete from subjects where id = from_id and user_id = auth.uid();
+  return n;
+end $$;
+revoke all on function public.merge_subject(uuid, uuid) from public, anon;
+grant execute on function public.merge_subject(uuid, uuid) to authenticated;

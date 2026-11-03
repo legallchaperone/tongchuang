@@ -36,6 +36,13 @@ interface Ctx {
   reload(): Promise<void>;
   saveProfile(p: Profile): Promise<void>;
   saveSubject(s: Omit<Subject, "id"> & { id?: string }): Promise<Subject>;
+  /** R-019: find my subject by name (case/space-insensitive, un-archiving it) or create it */
+  ensureSubject(name: string): Promise<Subject>;
+  countSubjectSessions(id: string): Promise<number>;
+  deleteSubject(id: string): Promise<void>;
+  mergeSubject(fromId: string, toId: string): Promise<number>;
+  /** R-019: subjects merged (→ kept id) or deleted (→ null) on this device; lets a running focus follow along */
+  subjectRedirects: Record<string, string | null>;
   createRoom(name: string): Promise<Room>;
   joinRoom(code: string): Promise<Room>;
   leaveRoom(id: string): Promise<void>;
@@ -49,6 +56,15 @@ interface Ctx {
 }
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+const REDIRECTS = "tc-subject-redirects-v1";
+/** R-019: names compare case-insensitively, ignoring surrounding spaces */
+export const subjectKey = (name: string) => name.trim().toLowerCase();
+/** follow merges/deletes, A→B→C */
+export function resolveSubject(id: string | null, redirects: Record<string, string | null>): string | null {
+  for (let i = 0; id && id in redirects && i < 20; i++) id = redirects[id];
+  return id;
+}
 
 const AppCtx = createContext<Ctx | null>(null);
 export const useApp = () => {
@@ -77,6 +93,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [kudos, setKudos] = useState<Kudos[]>([]);
   const [online, setOnline] = useState<Set<UserId>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const creatingSubject = useRef(new Map<string, Promise<Subject>>());
+  const [subjectRedirects, setSubjectRedirects] = useState<Record<string, string | null>>({});
+  useEffect(() => { try { setSubjectRedirects(JSON.parse(localStorage.getItem(REDIRECTS) || "{}") || {}); } catch { /* */ } }, []);
   const now = useNow(1000);
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
@@ -197,6 +216,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { off(); offP(); offS(); };
   }, [status, me, idsKey, roomKey, backend, pushToast]);
 
+  /** R-019: drop a subject locally and repoint my records at `to` (null = uncategorized) */
+  const redirectSubject = (from: string, to: string | null) => {
+    setSubjects((l) => l.filter((x) => x.id !== from));
+    setSessions((l) => l.map((x) => (x.subjectId === from && x.userId === me?.id ? { ...x, subjectId: to } : x)));
+    setSubjectRedirects((m) => {
+      const next = { ...m, [from]: to };
+      try { localStorage.setItem(REDIRECTS, JSON.stringify(next)); } catch { /* */ }
+      return next;
+    });
+  };
+
   const reload = useCallback(async () => { if (me) await load(me); }, [me, load]);
 
   const value: Ctx = {
@@ -204,10 +234,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     pushToast, dismissToast, reload,
     async saveProfile(p) { await backend.saveProfile(p); setProfiles((m) => ({ ...m, [p.id]: p })); },
     async saveSubject(s) { const r = await backend.saveSubject(s); setSubjects((l) => [...l.filter((x) => x.id !== r.id), r]); return r; },
+    async ensureSubject(name) {
+      if (!me) throw new Error("未登录");
+      const key = subjectKey(name);
+      if (!key) throw new Error("科目名称不能为空");
+      const mine = subjects.filter((x) => x.userId === me.id);
+      const same = mine.filter((x) => subjectKey(x.name) === key);
+      const hit = same.find((x) => !x.archived) || same[0];
+      if (hit && !hit.archived) return hit;
+      // a second Enter/blur while the first save is in flight must not create a twin
+      const inflight = creatingSubject.current.get(key);
+      if (inflight) return inflight;
+      const used = new Set(mine.filter((x) => !x.archived).map((x) => x.color));
+      const color = [0, 1, 2, 3, 4, 5, 6, 7].find((c) => !used.has(c)) ?? mine.length % 8;
+      const p = value.saveSubject(hit ? { ...hit, archived: false } : { userId: me.id, name: name.trim(), color, archived: false });
+      creatingSubject.current.set(key, p);
+      try { return await p; } finally { creatingSubject.current.delete(key); }
+    },
+    countSubjectSessions: (id) => backend.countSubjectSessions(id),
+    async deleteSubject(id) {
+      await backend.deleteSubject(id);
+      redirectSubject(id, null);
+    },
+    async mergeSubject(fromId, toId) {
+      const n = await backend.mergeSubject(fromId, toId);
+      redirectSubject(fromId, toId);
+      return n;
+    },
+    subjectRedirects,
     async createRoom(name) { const r = await backend.createRoom(name); await reload(); return r; },
     async joinRoom(code) { const r = await backend.joinRoom(code); await reload(); return r; },
     async leaveRoom(id) { await backend.leaveRoom(id); await reload(); },
     async addSession(s) {
+      // R-019: the subject may have been merged or deleted while this focus was running
+      const sid = resolveSubject(s.subjectId, subjectRedirects);
+      s = { ...s, subjectId: sid && (s.userId !== me?.id || subjects.some((x) => x.id === sid)) ? sid : null };
       const r = await backend.addSession(s);
       setSessions((l) => [r, ...l.filter((x) => x.id !== r.id)].sort((a, b) => b.startedAt - a.startedAt));
       return r;

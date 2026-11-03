@@ -1,6 +1,6 @@
 "use client";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { useApp } from "./store";
+import { resolveSubject, useApp } from "./store";
 import type { FocusMode, LiveStatus, UserId } from "./types";
 import { browserTz, MIN } from "./time";
 import { chime } from "./sound";
@@ -77,10 +77,16 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (loaded.current) write(KEY, state); }, [state]);
   useEffect(() => { if (loaded.current) write(PKEY, pending); }, [pending]);
 
+  // R-019: the running focus follows its subject when it is merged (or drops it when deleted)
+  useEffect(() => {
+    const to = resolveSubject(state?.subjectId ?? null, app.subjectRedirects);
+    if (state && to !== state.subjectId) setState((s) => s && { ...s, subjectId: to });
+  }, [state, app.subjectRedirects]);
+
   // mirror to live status
   const meId = app.me?.id;
   const subj = state?.subjectId ? app.subjects.find((s) => s.id === state.subjectId) : null;
-  const liveKey = JSON.stringify([state?.phase, state?.runningSince, state?.accumulatedMs, state?.task, state?.subjectId, state?.plannedMs, state?.startedAt, subj?.name]);
+  const liveKey = JSON.stringify([state?.phase, state?.runningSince, state?.accumulatedMs, state?.task, state?.subjectId, state?.plannedMs, state?.startedAt, subj?.name, subj?.color]);
   useEffect(() => {
     if (!meId || app.status !== "ready" || !loaded.current) return;
     const s = state;
@@ -95,7 +101,7 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
           accumulatedMs: s.accumulatedMs, runningSince: s.runningSince, updatedAt: Date.now(),
         };
     const cur = app.live[meId];
-    if (cur && cur.state === l.state && cur.runningSince === l.runningSince && cur.accumulatedMs === l.accumulatedMs && cur.task === l.task && cur.subjectName === l.subjectName && cur.startedAt === l.startedAt) return;
+    if (cur && cur.state === l.state && cur.runningSince === l.runningSince && cur.accumulatedMs === l.accumulatedMs && cur.task === l.task && cur.subjectName === l.subjectName && cur.subjectColor === l.subjectColor && cur.startedAt === l.startedAt) return;
     app.setLive(l).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveKey, meId, app.status]);

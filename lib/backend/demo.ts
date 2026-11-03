@@ -212,6 +212,22 @@ export function createDemoBackend(): Backend {
       if (i >= 0) db.subjects[i] = full; else db.subjects.push(full);
       save(); return full;
     },
+    countSubjectSessions: async (id) => delay(db.sessions.filter((s) => s.subjectId === id).length),
+    async deleteSubject(id) {
+      db.subjects = db.subjects.filter((x) => x.id !== id);
+      db.sessions.forEach((s) => { if (s.subjectId === id) s.subjectId = null; });
+      save();
+    },
+    async mergeSubject(fromId, toId) {
+      if (fromId === toId) throw new Error("不能合并到自己");
+      const from = db.subjects.find((x) => x.id === fromId && x.userId === ME);
+      if (!db.subjects.some((x) => x.id === toId && x.userId === ME)) throw new Error("没有找到要保留的科目");
+      if (!from) return 0;
+      let n = 0;
+      db.sessions.forEach((s) => { if (s.subjectId === fromId && s.userId === ME) { s.subjectId = toId; n++; } });
+      db.subjects = db.subjects.filter((x) => x.id !== fromId);
+      save(); return n;
+    },
     listRooms: async () => delay(db.rooms.filter((r) => r.memberIds.includes(ME))),
     async createRoom(name) {
       const r: Room = { id: uid(), name, code: Math.random().toString(36).slice(2, 8).toUpperCase(), createdBy: ME, memberIds: [ME] };

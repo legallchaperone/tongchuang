@@ -23,6 +23,12 @@ export interface Backend {
   // subjects (own)
   listSubjects(userIds: UserId[]): Promise<Subject[]>;
   saveSubject(s: Omit<Subject, "id"> & { id?: string }): Promise<Subject>;
+  /** R-019: how many of my records use this subject (all time) */
+  countSubjectSessions(id: string): Promise<number>;
+  /** R-019: delete a subject; its records become uncategorized */
+  deleteSubject(id: string): Promise<void>;
+  /** R-019: move every record of `fromId` to `toId`, then delete `fromId`; returns records moved */
+  mergeSubject(fromId: string, toId: string): Promise<number>;
 
   // rooms
   listRooms(): Promise<Room[]>;

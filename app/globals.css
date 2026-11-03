@@ -549,3 +549,16 @@ table tr + tr { border-top: 2px dashed var(--slot) !important; }
 .share-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .share-sp { flex: 1; }
 @media (max-width: 480px) { .share-actions .btn { flex: 1; } .share-sp { display: none; } .share-actions .seg { width: 100%; } .share-actions .seg button { flex: 1; } }
+
+/* ---- R-019 科目 ---- */
+.subj-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.subj-row-name { flex: 1; min-width: 6em; overflow-wrap: anywhere; }
+.subj-row-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.subj-row-acts .subj-del { color: var(--bad); }
+.subj-add { display: flex; gap: 8px; align-items: center; padding-top: 4px; }
+.subj-add .input { flex: 1; min-width: 0; height: 32px; }
+.subj-sheet { padding: 18px; }
+.subj-sheet p { margin: 0; line-height: 1.7; }
+.subj-sheet .subj-name { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; background: var(--panel-2); box-shadow: 0 0 0 2px var(--edge); white-space: nowrap; }
+.subj-sheet .subj-name .dot { width: 8px; height: 8px; }
+.subj-sheet-nav { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }

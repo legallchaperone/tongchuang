@@ -112,6 +112,17 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       if (s.id) row.id = s.id;
       return toSubject(check(await sb.from("subjects").upsert(row).select().single()));
     },
+    async countSubjectSessions(id) {
+      const { count, error } = await sb.from("sessions").select("id", { count: "exact", head: true }).eq("subject_id", id);
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    async deleteSubject(id) { check(await sb.from("subjects").delete().eq("id", id)); },
+    async mergeSubject(fromId, toId) {
+      const { data, error } = await sb.rpc("merge_subject", { from_id: fromId, to_id: toId });
+      if (error) throw new Error(error.message.includes("merge_subject") ? "数据库还没更新，请先执行 supabase/schema.sql 末尾的 R-019 部分" : error.message.includes("not found") ? "没有找到要保留的科目" : error.message);
+      return Number(data) || 0;
+    },
 
     async listRooms() {
       const { data: u } = await sb.auth.getUser();
@@ -148,10 +159,14 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       return out;
     },
     async addSession(s) {
-      return toSession(check(await sb.from("sessions").insert({
-        user_id: s.userId, subject_id: s.subjectId, task: s.task, started_at: iso(s.startedAt), ended_at: iso(s.endedAt),
+      const insert = (subjectId: string | null) => sb.from("sessions").insert({
+        user_id: s.userId, subject_id: subjectId, task: s.task, started_at: iso(s.startedAt), ended_at: iso(s.endedAt),
         duration_ms: Math.round(s.durationMs), mode: s.mode, rating: s.rating, note: s.note, tz: s.tz,
-      }).select().single()));
+      }).select().single();
+      let res = await insert(s.subjectId);
+      // R-019: the subject was deleted or merged on another device meanwhile; keep the record, uncategorized
+      if (res.error?.code === "23503" && s.subjectId) res = await insert(null);
+      return toSession(check(res));
     },
     async updateSession(id, patch) {
       const row: any = {};
