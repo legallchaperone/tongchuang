@@ -5,7 +5,8 @@ import { useApp } from "@/lib/store";
 import { browserTz, COMMON_TZS, hhmm, tzCity } from "@/lib/time";
 import { Avatar, seriesVar } from "@/components/bits";
 import { resetDemo } from "@/lib/backend/demo";
-import type { Profile } from "@/lib/types";
+import type { Profile, Subject } from "@/lib/types";
+import { SubjectSheet } from "@/components/SubjectSheet";
 import { CharacterEditor } from "@/components/CharacterEditor";
 import { NumberField } from "@/components/NumberField";
 import Link from "next/link";
@@ -17,6 +18,8 @@ export default function SettingsPage() {
   const [p, setP] = useState<Profile>(app.myProfile!);
   const [saved, setSaved] = useState(false);
   const [notif, setNotif] = useState<string>("default");
+  const [subjSheet, setSubjSheet] = useState<{ s: Subject; kind: "merge" | "delete" } | null>(null);
+  const [newSubj, setNewSubj] = useState("");
   useEffect(() => { if ("Notification" in window) setNotif(Notification.permission); }, []);
   const dirty = JSON.stringify(p) !== JSON.stringify(app.myProfile);
   const mine = app.subjects.filter((s) => s.userId === app.me!.id);
@@ -81,13 +84,27 @@ export default function SettingsPage() {
         <h2>科目</h2>
         {mine.length === 0 && <p className="muted">开始专注时可以添加科目。</p>}
         {mine.map((s) => (
-          <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div key={s.id} className="subj-row">
             <span className="dot" style={{ background: seriesVar(s.color), width: 10, height: 10 }} />
-            <span style={{ flex: 1, color: s.archived ? "var(--ink-3)" : undefined }}>{s.name}{s.archived && "（已归档）"}</span>
-            <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, color: (s.color + 1) % 8 })}>换色</button>
-            <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, archived: !s.archived })}>{s.archived ? "恢复" : "归档"}</button>
+            <span className="subj-row-name" style={{ color: s.archived ? "var(--ink-3)" : undefined }}>{s.name}{s.archived && "（已归档）"}</span>
+            <span className="subj-row-acts">
+              <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, color: (s.color + 1) % 8 })}>换色</button>
+              <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, archived: !s.archived })}>{s.archived ? "恢复" : "归档"}</button>
+              {mine.length > 1 && <button className="btn sm ghost" onClick={() => setSubjSheet({ s, kind: "merge" })}>合并到…</button>}
+              <button className="btn sm ghost subj-del" onClick={() => setSubjSheet({ s, kind: "delete" })}>删除</button>
+            </span>
           </div>
         ))}
+        <form className="subj-add" onSubmit={async (e) => {
+          e.preventDefault();
+          if (!newSubj.trim()) return;
+          try { await app.ensureSubject(newSubj); setNewSubj(""); }
+          catch (err) { app.pushToast({ title: "没能添加科目", body: (err as Error).message }); }
+        }}>
+          <input className="input" aria-label="新科目名称" placeholder="新科目名称" maxLength={40} value={newSubj} onChange={(e) => setNewSubj(e.target.value)} />
+          <button className="btn sm" type="submit" disabled={!newSubj.trim()}>添加</button>
+        </form>
+        {subjSheet && <SubjectSheet subject={subjSheet.s} kind={subjSheet.kind} onClose={() => setSubjSheet(null)} />}
       </section>
 
       <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>

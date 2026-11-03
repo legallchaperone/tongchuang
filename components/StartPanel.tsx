@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
-import React, { useMemo, useState } from "react";
-import { useApp } from "@/lib/store";
+import React, { useEffect, useMemo, useState } from "react";
+import { resolveSubject, useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import type { FocusMode } from "@/lib/types";
 import { IPlay, IPlus } from "./Icons";
@@ -31,13 +31,18 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
+  // R-019: follow a merged / deleted subject
+  useEffect(() => {
+    const to = resolveSubject(subjectId, app.subjectRedirects);
+    if (to !== subjectId) setSubjectId(to);
+  }, [subjectId, app.subjectRedirects]);
+
   async function addSubject() {
     const name = newName.trim();
     if (!name) { setAdding(false); return; }
-    const used = new Set(mine.map((s) => s.color));
-    const color = [0, 1, 2, 3, 4, 5, 6, 7].find((c) => !used.has(c)) ?? mine.length % 8;
     try {
-      const s = await app.saveSubject({ userId: app.me!.id, name, color, archived: false });
+      // an existing subject with the same name is picked (and restored if archived) instead of duplicated
+      const s = await app.ensureSubject(name);
       setSubjectId(s.id);
     } catch (e) { app.pushToast({ title: "没能添加科目", body: (e as Error).message }); }
     setNewName(""); setAdding(false);
