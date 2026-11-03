@@ -123,6 +123,20 @@ begin
   return r;
 end $$;
 
+-- a saved record can only be shortened (forgot to stop the timer), never lengthened or moved
+create or replace function public.guard_session_edit()
+returns trigger language plpgsql as $$
+begin
+  if new.duration_ms > old.duration_ms then raise exception 'duration can only be shortened'; end if;
+  if new.started_at <> old.started_at then raise exception 'start time cannot change'; end if;
+  if new.ended_at > old.ended_at then raise exception 'end time can only move earlier'; end if;
+  if new.user_id <> old.user_id then raise exception 'owner cannot change'; end if;
+  return new;
+end $$;
+drop trigger if exists sessions_guard_edit on public.sessions;
+create trigger sessions_guard_edit before update on public.sessions
+  for each row execute function public.guard_session_edit();
+
 -- auto-create a profile for each new account
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$

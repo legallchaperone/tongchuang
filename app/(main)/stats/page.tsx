@@ -5,8 +5,7 @@ import { byDay, dailyBySubject, hourProfile, streaks, subjectTotals, summarize, 
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, HBars, Heatmap, HourChart } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
-import { ITrash } from "@/components/Icons";
-import type { UserId } from "@/lib/types";
+import type { Session, UserId } from "@/lib/types";
 
 const RANGES = [7, 30, 90, 365] as const;
 
@@ -143,7 +142,7 @@ export default function StatsPage() {
       </div>
 
       <section className="card">
-        <div className="cardhead" style={{ paddingBottom: 8 }}><h2>记录明细</h2><span className="hint">{isMe ? "记错了可以删除" : `共 ${historyAll.length} 条`}</span></div>
+        <div className="cardhead" style={{ paddingBottom: 8 }}><h2>记录明细</h2><span className="hint">{isMe ? "忘了点结束？点“修改”把时长改短（只能改短）" : `共 ${historyAll.length} 条`}</span></div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr style={{ textAlign: "left", color: "var(--ink-3)", fontSize: 12 }}>
@@ -159,7 +158,7 @@ export default function StatsPage() {
                     <td style={{ maxWidth: 320 }}>{sub && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(sub.color) }} />{sub.name}</span>}{s.task || "自习"}{s.note && <div className="muted" style={{ fontSize: 12 }}>{s.note}</div>}</td>
                     <td className="num" style={{ textAlign: "right" }}>{dur(s.durationMs)}</td>
                     <td className="num" style={{ textAlign: "right", paddingRight: 20 }}>{s.rating ?? "—"}</td>
-                    {isMe && <td style={{ width: 44 }}><DeleteBtn id={s.id} /></td>}
+                    {isMe && <td style={{ textAlign: "right", paddingRight: 12 }}><EditDuration s={s} /></td>}
                   </tr>
                 );
               })}
@@ -174,9 +173,28 @@ export default function StatsPage() {
   );
 }
 
-function DeleteBtn({ id }: { id: string }) {
+/** shorten a saved record (e.g. the timer kept running after you left); it can never be made longer */
+function EditDuration({ s }: { s: Session }) {
   const app = useApp();
-  const [armed, setArmed] = useState(false);
-  if (armed) return <button className="btn sm danger" onClick={() => app.deleteSession(id).catch((e) => app.pushToast({ title: "删除失败", body: e.message }))} onBlur={() => setArmed(false)} autoFocus>删除</button>;
-  return <button className="iconbtn" aria-label="删除这条记录" onClick={() => setArmed(true)}><ITrash /></button>;
+  const max = Math.floor(s.durationMs / 60_000);
+  const [open, setOpen] = useState(false);
+  const [min, setMin] = useState(max);
+  const [busy, setBusy] = useState(false);
+  if (!open) return <button className="btn sm ghost" onClick={() => { setMin(max); setOpen(true); }} aria-label="修改这条记录的时长">修改</button>;
+  const valid = min >= 1 && min <= max;
+  async function save() {
+    setBusy(true);
+    try { await app.updateSession(s.id, { durationMs: min * 60_000 }); setOpen(false); app.pushToast({ title: "时长已改为 " + dur(min * 60_000) }); }
+    catch (e) { app.pushToast({ title: "没改成", body: (e as Error).message }); }
+    finally { setBusy(false); }
+  }
+  return (
+    <span style={{ display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
+      <input className="input num" type="number" min={1} max={max} value={min} aria-label={`新的时长（分钟，最多 ${max}）`}
+        style={{ width: 72, height: 28 }} onChange={(e) => setMin(Math.floor(+e.target.value || 0))} onKeyDown={(e) => { if (e.key === "Enter" && valid) save(); if (e.key === "Escape") setOpen(false); }} autoFocus />
+      <span className="muted">分</span>
+      <button className="btn sm primary" disabled={!valid || busy || min === max} onClick={save}>保存</button>
+      <button className="btn sm ghost" onClick={() => setOpen(false)}>取消</button>
+    </span>
+  );
 }

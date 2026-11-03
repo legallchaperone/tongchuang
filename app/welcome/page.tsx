@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
+import { markVersionSeen } from "@/lib/version";
 import { defaultLook } from "@/lib/pixel";
 import { browserTz, hhmm, tzCity } from "@/lib/time";
 import type { Profile } from "@/lib/types";
@@ -39,7 +40,7 @@ function Welcome() {
 
   async function saveProfile() {
     setBusy(true); setErr(null);
-    try { await app.saveProfile({ ...p!, name: p!.name.trim() || "同学", look: p!.look ?? defaultLook(p!.id) }); setStep(3); }
+    try { await app.saveProfile({ ...p!, name: p!.name.trim() || "同学", look: p!.look ?? defaultLook(p!.id) }); markVersionSeen(); setStep(3); }
     catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   }

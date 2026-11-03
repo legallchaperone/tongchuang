@@ -7,6 +7,8 @@ import { Avatar, seriesVar } from "@/components/bits";
 import { resetDemo } from "@/lib/backend/demo";
 import type { Profile } from "@/lib/types";
 import { CharacterEditor } from "@/components/CharacterEditor";
+import Link from "next/link";
+import { APP_VERSION, BUILD_ID, CHANGELOG } from "@/lib/version";
 
 export default function SettingsPage() {
   const app = useApp();
@@ -94,6 +96,16 @@ export default function SettingsPage() {
           {notif === "granted" ? <span className="up">已开启</span>
             : notif === "denied" ? <span className="muted">浏览器已拒绝通知，请在浏览器地址栏的站点设置里开启。</span>
             : <button className="btn" onClick={async () => setNotif(await Notification.requestPermission())}>开启通知</button>}
+        </div>
+      </section>
+
+      <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h2>关于</h2>
+        <p>同窗 <b className="num" style={{ fontWeight: 400 }}>v{APP_VERSION}</b> <span className="muted">· 构建 {BUILD_ID}</span></p>
+        <p className="muted">最近一次更新：{CHANGELOG[0].title}（{CHANGELOG[0].date}）</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn sm" href="/release#changelog">更新日志</Link>
+          <Link className="btn sm ghost" href="/release">产品介绍</Link>
         </div>
       </section>
 

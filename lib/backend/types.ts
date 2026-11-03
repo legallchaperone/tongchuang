@@ -30,7 +30,7 @@ export interface Backend {
   // sessions
   listSessions(userIds: UserId[], sinceMs: number): Promise<Session[]>;
   addSession(s: Omit<Session, "id">): Promise<Session>;
-  updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId">>): Promise<void>;
+  updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId" | "durationMs" | "endedAt">>): Promise<void>;
   deleteSession(id: string): Promise<void>;
 
   // live

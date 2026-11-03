@@ -40,7 +40,7 @@ interface Ctx {
   joinRoom(code: string): Promise<Room>;
   leaveRoom(id: string): Promise<void>;
   addSession(s: Omit<Session, "id">): Promise<Session>;
-  updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId">>): Promise<void>;
+  updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId" | "durationMs" | "endedAt">>): Promise<void>;
   deleteSession(id: string): Promise<void>;
   setLive(l: LiveStatus): Promise<void>;
   toggleKudos(sessionId: string, emoji: string): Promise<void>;
@@ -213,6 +213,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return r;
     },
     async updateSession(id, patch) {
+      const cur = sessions.find((x) => x.id === id);
+      if (cur && patch.durationMs != null) {
+        // a record can only get shorter: forgetting to stop the timer is the only legitimate correction
+        if (patch.durationMs > cur.durationMs) throw new Error("时长只能改短，不能改长");
+        if (patch.durationMs < 60_000) throw new Error("时长至少 1 分钟");
+        patch = { ...patch, endedAt: cur.endedAt - (cur.durationMs - patch.durationMs) };
+      }
       await backend.updateSession(id, patch);
       setSessions((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     },

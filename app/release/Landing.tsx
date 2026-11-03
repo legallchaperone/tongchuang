@@ -9,6 +9,7 @@ import { Ring } from "@/components/bits";
 import { DAY, HOUR, MIN, dayKey, hhmm, partsIn, startOfDay, tzCity } from "@/lib/time";
 import { yearGrid } from "@/lib/stats";
 import type { LiveState, LiveStatus, Profile } from "@/lib/types";
+import { APP_VERSION, CHANGELOG } from "@/lib/version";
 
 /* ───────── sample classmates (illustration only) ───────── */
 const mk = (id: string, name: string, tz: string, color: number, look: Profile["look"]): Profile => ({ id, name, tz, color, look, dailyGoalMin: 240, pomodoroMin: 25, breakMin: 5 });
@@ -96,7 +97,7 @@ export function Landing() {
       <header className="lp-bar">
         <Link href="/release" className="logo" style={{ padding: 0 }}><Logo /> 同窗</Link>
         <nav className="lp-nav">
-          <a href="#hall">书房</a><a href="#timezone">时差</a><a href="#focus">专注</a><a href="#together">陪伴</a><a href="#data">数据</a><a href="#faq">问答</a>
+          <a href="#hall">书房</a><a href="#timezone">时差</a><a href="#focus">专注</a><a href="#together">陪伴</a><a href="#data">数据</a><a href="#faq">问答</a><a href="#changelog">更新日志</a>
         </nav>
         <Link href={cta.href} className="btn primary sm">{cta.label}</Link>
       </header>
@@ -269,16 +270,27 @@ export function Landing() {
             ["一个自习室最多几个人？", "12 个。你可以同时加入好几个自习室，比如一个和室友，一个和异地的朋友。"],
             ["我在上海，朋友在纽约，“今天”怎么算？", "各算各的。你的今天按上海的日期，朋友的今天按纽约的日期，所以连续天数和每日目标对两个人都公平。"],
             ["关掉页面，计时会停吗？", "不会。计时记在你的设备上，回来时接着走；朋友那边会一直看到你在专注，直到你点“结束”。"],
-            ["忘记点结束怎么办？", "在数据页的记录明细里可以删除记错的记录。"],
+            ["忘记点结束怎么办？", "结束时弹出的复盘窗口里可以直接把时长改短；已经保存的记录，也能在“数据”页的记录明细里点“修改”改短。时长只能改短、不能改长，这样记录才有说服力。"],
           ].map(([q, a]) => (
             <details key={q} className="card pad"><summary>{q}</summary><p>{a}</p></details>
           ))}
         </div>
       </Section>
 
+      <Section id="changelog" kicker={`当前版本 v${APP_VERSION}`} title="更新日志" lead="网站更新后，开着的页面会提示刷新；每次大更新后第一次打开，会告诉你这次改了什么。">
+        <div className="lp-log">
+          {CHANGELOG.map((e) => (
+            <div key={e.version} className="card pad">
+              <div className="lp-log-head"><span className="lp-kicker">v{e.version}</span><b>{e.title}</b><span className="muted">{e.date}</span></div>
+              <ul>{e.items.map((i) => <li key={i}>{i}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      </Section>
+
       <footer className="lp-foot">
         <span className="logo" style={{ padding: 0 }}><Logo /> 同窗</span>
-        <span>像素画为原创绘制 · 字体 Fusion Pixel（SIL OFL 1.1）</span>
+        <span>v{APP_VERSION} · 像素画为原创绘制 · 字体 Fusion Pixel（SIL OFL 1.1）</span>
         <Link href={cta.href} className="btn primary sm">{cta.label}</Link>
       </footer>
     </div>

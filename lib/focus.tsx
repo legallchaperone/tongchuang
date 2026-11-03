@@ -41,7 +41,7 @@ interface FocusCtx {
   startBreak(): void;
   skipBreak(): void;
   nextPomodoro(): void;
-  saveReflection(r: { rating: number | null; note: string; task: string; subjectId: string | null }): Promise<void>;
+  saveReflection(r: { rating: number | null; note: string; task: string; subjectId: string | null; durationMs?: number }): Promise<void>;
   dropReflection(): void;
   setTask(task: string, subjectId: string | null): void;
 }
@@ -163,11 +163,13 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       setState((s) => s && { ...s, phase: "focus", plannedMs: (prof?.pomodoroMin || 25) * MIN, startedAt: now, accumulatedMs: 0, runningSince: now });
     },
-    async saveReflection({ rating, note, task, subjectId }) {
+    async saveReflection({ rating, note, task, subjectId, durationMs }) {
       if (!pending || !app.me) return;
       const p = pending;
+      // you can record less than the timer measured (forgot to stop it), never more
+      const d = Math.max(MIN, Math.min(p.durationMs, durationMs ?? p.durationMs));
       setPending(null);
-      await app.addSession({ userId: app.me.id, subjectId, task, startedAt: p.startedAt, endedAt: p.endedAt, durationMs: p.durationMs, mode: p.mode, rating, note, tz: prof?.tz || browserTz() });
+      await app.addSession({ userId: app.me.id, subjectId, task, startedAt: p.startedAt, endedAt: p.endedAt - (p.durationMs - d), durationMs: d, mode: p.mode, rating, note, tz: prof?.tz || browserTz() });
     },
     dropReflection() { setPending(null); },
     setTask(task, subjectId) { setState((s) => s && { ...s, task, subjectId }); },

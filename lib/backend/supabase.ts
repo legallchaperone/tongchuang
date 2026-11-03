@@ -133,11 +133,15 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     },
     async updateSession(id, patch) {
       const row: any = {};
+      // the database also refuses to make a record longer (see the guard trigger in schema.sql)
       if ("rating" in patch) row.rating = patch.rating;
       if ("note" in patch) row.note = patch.note;
       if ("task" in patch) row.task = patch.task;
       if ("subjectId" in patch) row.subject_id = patch.subjectId;
-      check(await sb.from("sessions").update(row).eq("id", id));
+      if ("durationMs" in patch) row.duration_ms = Math.round(patch.durationMs!);
+      if ("endedAt" in patch) row.ended_at = iso(patch.endedAt!);
+      const { error } = await sb.from("sessions").update(row).eq("id", id);
+      if (error) throw new Error(error.message.includes("only be shortened") ? "时长只能改短，不能改长" : error.message);
     },
     async deleteSession(id) { check(await sb.from("sessions").delete().eq("id", id)); },
 

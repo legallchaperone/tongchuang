@@ -38,10 +38,11 @@ export function ReflectionSheet() {
   const [task, setTask] = useState("");
   const [subjectId, setSubjectId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [mins, setMins] = useState(0);
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    if (p) { setRating(null); setNote(""); setTask(p.task); setSubjectId(p.subjectId); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
+    if (p) { setRating(null); setNote(""); setTask(p.task); setSubjectId(p.subjectId); setMins(Math.max(1, Math.floor(p.durationMs / 60000))); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
   }, [p]);
 
   const mine = useMemo(() => app.subjects.filter((s) => s.userId === app.me?.id && !s.archived), [app.subjects, app.me]);
@@ -50,12 +51,14 @@ export function ReflectionSheet() {
   const today = dayKey(Date.now(), tz);
   const before = app.sessions.filter((s) => s.userId === app.me?.id && dayKey(s.startedAt, tz) === today).reduce((a, s) => a + s.durationMs, 0);
   const goal = app.myProfile.dailyGoalMin * MIN;
-  const after = before + p.durationMs;
+  const maxMins = Math.max(1, Math.floor(p.durationMs / 60000));
+  const chosen = Math.min(maxMins, Math.max(1, mins || 1)) * MIN;
+  const after = before + chosen;
   const pct = Math.round((after / goal) * 100);
 
   async function save() {
     setSaving(true);
-    try { await focus.saveReflection({ rating, note: note.trim(), task: task.trim(), subjectId }); }
+    try { await focus.saveReflection({ rating, note: note.trim(), task: task.trim(), subjectId, durationMs: mins >= maxMins ? p!.durationMs : chosen }); }
     catch (e) { app.pushToast({ title: "保存失败", body: (e as Error).message }); }
     finally { setSaving(false); }
   }
@@ -65,7 +68,13 @@ export function ReflectionSheet() {
       <div className="sheet">
         <div>
           <p className="muted" id="refl-title">{p.completedPomodoro ? "完成一个番茄 🍅" : "本次专注结束"}</p>
-          <div className="done-num" style={{ marginTop: 8 }}>{dur(p.durationMs)}</div>
+          <div className="done-num" style={{ marginTop: 8 }}>{dur(chosen)}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            <label className="muted" htmlFor="refl-min">{p.durationMs > 2 * 3600000 ? "计了很久，中途离开过吗？实际专注" : "实际专注"}</label>
+            <input id="refl-min" className="input num" type="number" min={1} max={maxMins} value={mins} style={{ width: 80, height: 28 }}
+              onChange={(e) => setMins(Math.min(maxMins, Math.max(0, Math.floor(+e.target.value || 0))))} />
+            <span className="muted">分钟（最多 {maxMins}，只能改短）</span>
+          </div>
         </div>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
