@@ -377,17 +377,27 @@ export function createSupabaseBackend(url: string, key: string): Backend {
 
     // R-020 留言板
     async listGuestbook(ownerId, limit) {
-      const { data, error } = await sb.from("guestbook").select("*").eq("owner_id", ownerId)
+      let { data, error } = await sb.from("guestbook").select("*").eq("owner_id", ownerId).is("parent_id", null)
         .order("created_at", { ascending: false }).limit(limit);
+      // R-023 not migrated yet: no replies, just the notes
+      if (error && /parent_id/.test(error.message || "")) {
+        ({ data, error } = await sb.from("guestbook").select("*").eq("owner_id", ownerId).order("created_at", { ascending: false }).limit(limit));
+        if (error) throw guestbookError(error);
+        return (data as any[]).map(toGuestbook);
+      }
       if (error) throw guestbookError(error);
-      return (data as any[]).map(toGuestbook);
+      const notes = (data as any[]).map(toGuestbook);
+      if (!notes.length) return notes;
+      const r = await sb.from("guestbook").select("*").in("parent_id", notes.map((n) => n.id)).order("created_at", { ascending: true });
+      if (r.error) throw guestbookError(r.error);
+      return [...notes, ...(r.data as any[]).map(toGuestbook)];
     },
     async addGuestbook(e) {
-      const { text, error: bad } = checkGuestbook(e.text, e.sticker);
+      const { text, error: bad } = checkGuestbook(e.text, e.parentId ? null : e.sticker);
       if (bad) throw new Error(bad);
-      const { data, error } = await sb.from("guestbook")
-        .insert({ owner_id: e.ownerId, author_id: await myId(), text: text || null, sticker: e.sticker || null })
-        .select().single();
+      const row: Record<string, unknown> = { owner_id: e.ownerId, author_id: await myId(), text: text || null, sticker: e.parentId ? null : e.sticker || null };
+      if (e.parentId) { row.parent_id = e.parentId; row.reply_to = e.replyTo || null; }
+      const { data, error } = await sb.from("guestbook").insert(row).select().single();
       if (error) throw guestbookError(error);
       return toGuestbook(data);
     },
@@ -410,11 +420,20 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         .subscribe();
       return () => { sb.removeChannel(ch); };
     },
+    subscribeGuestbookReplies(me, cb) {
+      const ch = sb.channel("gbr-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `reply_to=eq.${me}` }, (p: any) => {
+          if (p.new?.id) cb(toGuestbook(p.new));
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
   };
 }
 
 const toGuestbook = (r: any): GuestbookEntry => ({
   id: r.id, ownerId: r.owner_id, authorId: r.author_id || "", text: r.text || "", sticker: r.sticker || null, createdAt: ts(r.created_at) || 0,
+  parentId: r.parent_id || null, replyTo: r.reply_to || null,
 });
 /** R-020: the usual failures in plain Chinese */
 function guestbookError(e: { message: string; code?: string }): Error {
@@ -423,6 +442,8 @@ function guestbookError(e: { message: string; code?: string }): Error {
   if (/row-level security/i.test(m)) return new Error("只能给同一个自习室的同窗留言");
   if (/guestbook_text_check/.test(m)) return new Error("最多 60 个字");
   if (/guestbook_not_empty/.test(m)) return new Error("写句话或者选张贴纸吧");
+  if (/guestbook_reply_text/.test(m)) return new Error("回复写句话吧");
+  if (/parent_id|reply_to/.test(m) && /schema cache|does not exist|Could not find/i.test(m)) return new Error("回复功能还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql");
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }

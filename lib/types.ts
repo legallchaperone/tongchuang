@@ -153,4 +153,8 @@ export interface GuestbookEntry {
   /** sticker id from components/Stickers (null = text only) */
   sticker: string | null;
   createdAt: number;
+  /** R-023: a reply hangs under this top-level note (one level only; replies are text only) */
+  parentId?: string | null;
+  /** R-023: who the reply answers (gets notified) */
+  replyTo?: UserId | null;
 }

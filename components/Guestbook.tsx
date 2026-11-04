@@ -105,6 +105,8 @@ function Board({ ownerId, me, isOwner }: { ownerId: UserId; me: UserId; isOwner:
   const upsert = useCallback((e: GuestbookEntry) => {
     setEntries((list) => (list && list.some((x) => x.id === e.id) ? list : [e, ...(list || [])].sort((a, b) => b.createdAt - a.createdAt)));
   }, []);
+  /** which note's reply box is open, and who it answers */
+  const [replying, setReplying] = useState<{ noteId: string; to: UserId } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -115,19 +117,27 @@ function Board({ ownerId, me, isOwner }: { ownerId: UserId; me: UserId; isOwner:
   }, [backend, ownerId, limit]);
 
   useEffect(() => backend.subscribeGuestbook(ownerId, (e, kind) => {
-    if (kind === "delete") { setEntries((list) => list && list.filter((x) => x.id !== e.id)); return; }
+    if (kind === "delete") { setEntries((list) => list && list.filter((x) => x.id !== e.id && x.parentId !== e.id)); return; }
     upsert(e);
     markFresh(e.id);
   }), [backend, ownerId, upsert, markFresh]);
 
-  const list = entries || [];
+  const all = entries || [];
+  const list = all.filter((e) => !e.parentId);
+  const replies = useMemo(() => {
+    const m = new Map<string, GuestbookEntry[]>();
+    for (const e of entries || []) if (e.parentId) m.set(e.parentId, [...(m.get(e.parentId) || []), e]);
+    m.forEach((l) => l.sort((a, b) => a.createdAt - b.createdAt));
+    return m;
+  }, [entries]);
   const shown = expanded ? list : list.slice(0, FOLD);
   const hidden = list.length - shown.length;
   const mayHaveMore = expanded && list.length >= limit;
 
   async function remove(e: GuestbookEntry) {
     await backend.deleteGuestbook(e.id);
-    setEntries((l) => l && l.filter((x) => x.id !== e.id));
+    // a note takes its replies with it
+    setEntries((l) => l && l.filter((x) => x.id !== e.id && x.parentId !== e.id));
   }
 
   return (
@@ -158,7 +168,11 @@ function Board({ ownerId, me, isOwner }: { ownerId: UserId; me: UserId; isOwner:
           ) : (
             <ul className="gb-notes">
               {shown.map((e) => (
-                <Note key={e.id} e={e} me={me} isOwner={isOwner} fresh={fresh.has(e.id)} onDelete={() => setConfirm(e)} />
+                <Note key={e.id} e={e} me={me} isOwner={isOwner} fresh={fresh} onDelete={setConfirm}
+                  replies={replies.get(e.id) || []}
+                  replyTo={replying?.noteId === e.id ? replying.to : null}
+                  onReply={(to) => setReplying(to ? { noteId: e.id, to } : null)}
+                  onReplied={(r) => { upsert(r); markFresh(r.id); setReplying(null); }} />
               ))}
             </ul>
           )}
@@ -244,7 +258,10 @@ function Composer({ ownerId, isOwner, ownerName, onPosted }: { ownerId: UserId; 
   );
 }
 
-function Note({ e, me, isOwner, fresh, onDelete }: { e: GuestbookEntry; me: UserId; isOwner: boolean; fresh: boolean; onDelete: () => void }) {
+function Note({ e, me, isOwner, fresh, onDelete, replies, replyTo, onReply, onReplied }: {
+  e: GuestbookEntry; me: UserId; isOwner: boolean; fresh: Set<string>; onDelete: (e: GuestbookEntry) => void;
+  replies: GuestbookEntry[]; replyTo: UserId | null; onReply: (to: UserId | null) => void; onReplied: (r: GuestbookEntry) => void;
+}) {
   const app = useApp();
   const look = useMemo(() => lookFor(e.id), [e.id]);
   const p = app.profiles[e.authorId];
@@ -259,14 +276,14 @@ function Note({ e, me, isOwner, fresh, onDelete }: { e: GuestbookEntry; me: User
       <span className="gb-name">{name}</span>
       <time className="muted num" dateTime={new Date(e.createdAt).toISOString()} title={new Date(e.createdAt).toLocaleString()}>{ago(e.createdAt, app.now)}</time>
       {canDelete && (
-        <button type="button" className="iconbtn gb-del" onClick={onDelete} aria-label={mine ? "撕掉我的这张" : `撕掉 ${name} 的这张`} title="撕掉">
+        <button type="button" className="iconbtn gb-del" onClick={() => onDelete(e)} aria-label={mine ? "撕掉我的这张" : `撕掉 ${name} 的这张`} title="撕掉">
           <ITrash />
         </button>
       )}
     </div>
   );
   return (
-    <li className={`gb-note${solo ? " solo" : ""}${fresh ? " fresh" : ""}`} style={style}>
+    <li className={`gb-note${solo ? " solo" : ""}${fresh.has(e.id) ? " fresh" : ""}`} style={style}>
       {solo ? (
         <>
           <div className="gb-solo-art"><Sticker id={e.sticker!} size={72} /></div>
@@ -282,7 +299,92 @@ function Note({ e, me, isOwner, fresh, onDelete }: { e: GuestbookEntry; me: User
           </div>
         </>
       )}
+      <Thread note={e} me={me} isOwner={isOwner} replies={replies} fresh={fresh} replyTo={replyTo} onReply={onReply} onReplied={onReplied} onDelete={onDelete} />
     </li>
+  );
+}
+
+/** R-023 a note's replies: small paper strips taped under it, oldest first, plus a one-line reply box */
+const REPLY_FOLD = 3;
+function Thread({ note, me, isOwner, replies, fresh, replyTo, onReply, onReplied, onDelete }: {
+  note: GuestbookEntry; me: UserId; isOwner: boolean; replies: GuestbookEntry[]; fresh: Set<string>;
+  replyTo: UserId | null; onReply: (to: UserId | null) => void; onReplied: (r: GuestbookEntry) => void; onDelete: (e: GuestbookEntry) => void;
+}) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const name = (id: UserId | null | undefined) => (id === me ? "我" : app.profiles[id || ""]?.name || "同窗");
+  const hidden = open ? 0 : Math.max(0, replies.length - REPLY_FOLD);
+  const shown = hidden ? replies.slice(-REPLY_FOLD) : replies;
+  const crowd = new Set([note.authorId, ...replies.map((r) => r.authorId)]).size > 2;
+  /** on my own note, answer whoever spoke last; otherwise answer the note's author */
+  function defaultTo(): UserId {
+    if (note.authorId !== me) return note.authorId;
+    const other = [...replies].reverse().find((r) => r.authorId !== me);
+    return other ? other.authorId : note.authorId;
+  }
+  return (
+    <div className="gb-thread">
+      {hidden > 0 && <button type="button" className="gb-thread-more" onClick={() => setOpen(true)}>还有 <span className="num">{hidden}</span> 条回复</button>}
+      {shown.map((r) => {
+        const mine = r.authorId === me;
+        // with only two people talking, "A 回复 B" is obvious
+        const showTo = crowd && r.replyTo && r.replyTo !== r.authorId;
+        return (
+          <div key={r.id} className={`gb-reply${fresh.has(r.id) ? " fresh" : ""}`}>
+            <p>
+              <b>{name(r.authorId)}</b>
+              {showTo && <><span className="gb-reply-to"> 回复 </span><b>{name(r.replyTo)}</b></>}
+              <span className="gb-reply-to">：</span>{r.text}
+            </p>
+            <div className="gb-reply-meta">
+              <time className="num" dateTime={new Date(r.createdAt).toISOString()} title={new Date(r.createdAt).toLocaleString()}>{ago(r.createdAt, app.now)}</time>
+              {!mine && <button type="button" className="gb-reply-btn" onClick={() => onReply(r.authorId)} aria-label={`回复 ${name(r.authorId)}`}>回复</button>}
+              {(mine || isOwner) && (
+                <button type="button" className="iconbtn gb-del" onClick={() => onDelete(r)} aria-label={mine ? "删掉我的回复" : `删掉 ${name(r.authorId)} 的回复`} title="删掉"><ITrash /></button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {replyTo ? (
+        <ReplyBox note={note} to={replyTo} toName={name(replyTo)} onCancel={() => onReply(null)} onPosted={onReplied} />
+      ) : (
+        <button type="button" className="gb-reply-open" onClick={() => onReply(defaultTo())}>
+          回复
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ReplyBox({ note, to, toName, onCancel, onPosted }: { note: GuestbookEntry; to: UserId; toName: string; onCancel: () => void; onPosted: (r: GuestbookEntry) => void }) {
+  const app = useApp();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => { ref.current?.focus(); }, [to]);
+  const len = gbLength(text.trim());
+  async function send(ev: React.FormEvent) {
+    ev.preventDefault();
+    const { text: t, error } = checkGuestbook(text, null);
+    if (error) { setErr(error === "写句话或者选张贴纸吧" ? "写句话吧" : error); return; }
+    setBusy(true); setErr(null);
+    try {
+      onPosted(await app.backend.addGuestbook({ ownerId: note.ownerId, text: t, sticker: null, parentId: note.id, replyTo: to }));
+    } catch (e) { setErr((e as Error).message || "没发出去，稍后再试"); } finally { setBusy(false); }
+  }
+  return (
+    <form className="gb-reply-box" onSubmit={send} onKeyDown={(ev) => { if (ev.key === "Escape" && !busy) onCancel(); }}>
+      <input ref={ref} className="input" value={text} maxLength={GB_MAX_TEXT * 2} disabled={busy}
+        onChange={(ev) => { setText(ev.target.value); if (err) setErr(null); }}
+        placeholder={to === app.me?.id ? "补一句…" : `回复 ${toName}…`} aria-label={`回复 ${toName}`} />
+      <div className="gb-reply-box-row">
+        {err ? <span className="gb-err" role="alert">{err}</span> : <span className={`num ${len > GB_MAX_TEXT ? "gb-over" : "muted"}`}>{len > 0 ? `${len}/${GB_MAX_TEXT}` : ""}</span>}
+        <button type="button" className="btn sm ghost" onClick={onCancel} disabled={busy}>取消</button>
+        <button type="submit" className="btn sm primary" disabled={busy || len === 0 || len > GB_MAX_TEXT}>{busy ? "…" : "发送"}</button>
+      </div>
+    </form>
   );
 }
 
@@ -301,16 +403,16 @@ function ConfirmTear({ e, me, onClose, onConfirm }: { e: GuestbookEntry; me: Use
   return (
     <div className="scrim" role="dialog" aria-modal="true" aria-labelledby="gb-tear-title" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) onClose(); }}>
       <div className="sheet card gb-sheet">
-        <h1 id="gb-tear-title" style={{ fontSize: 22 }}>{mine ? "撕掉这张便利贴？" : `撕掉 ${name} 的便利贴？`}</h1>
+        <h1 id="gb-tear-title" style={{ fontSize: 22 }}>{e.parentId ? (mine ? "删掉这条回复？" : `删掉 ${name} 的回复？`) : mine ? "撕掉这张便利贴？" : `撕掉 ${name} 的便利贴？`}</h1>
         <div className="gb-sheet-preview">
           {e.sticker && <Sticker id={e.sticker} size={36} />}
           <p>{e.text || <span className="muted">一张「{stickerName(e.sticker)}」贴纸</span>}</p>
         </div>
-        <p className="muted">撕掉以后谁都看不到了，没法找回。</p>
+        <p className="muted">{e.parentId ? "删掉以后谁都看不到了，没法找回。" : "撕掉以后谁都看不到了，下面的回复也一起没了，没法找回。"}</p>
         <div className="gb-sheet-nav">
           <button ref={cancelRef} className="btn ghost" onClick={onClose} disabled={busy}>留着</button>
           <button className="btn danger" disabled={busy} onClick={async () => { setBusy(true); try { await onConfirm(); } finally { setBusy(false); } }}>
-            {busy ? "撕…" : "撕掉"}
+            {busy ? "…" : e.parentId ? "删掉" : "撕掉"}
           </button>
         </div>
       </div>

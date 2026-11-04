@@ -850,7 +850,8 @@ button.st-line.add { color: var(--ink-3); }
   border: 6px solid; border-color: var(--wood-hi) var(--wood) var(--wood-dk) var(--wood);
   box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 2px var(--edge), inset 0 6px 0 2px rgba(0, 0, 0, .16);
 }
-.gb-notes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 24px 14px; align-items: start; }
+.gb-notes { list-style: none; margin: 0; padding: 0; columns: 136px; column-gap: 14px; }
+.gb-notes > .gb-note { display: inline-block; width: 100%; vertical-align: top; break-inside: avoid; margin-bottom: 24px; }
 .gb-note { position: relative; min-width: 0; margin-top: var(--dy, 0px); filter: drop-shadow(3px 3px 0 rgba(40, 20, 8, .38)); color: var(--gb-ink); }
 .gb-note.fresh { animation: gb-in .36s steps(3); }
 @keyframes gb-in { from { transform: translateY(-14px); opacity: 0; } }
@@ -870,6 +871,31 @@ button.st-line.add { color: var(--ink-3); }
   .gb-note:hover .gb-del, .gb-note .gb-del:focus-visible { opacity: .85; }
 }
 /* sticker on its own: stuck straight on the cork with a white die-cut edge, and a little label */
+/* R-023 回复：钉在便利贴下面的小纸条 */
+.gb-thread { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; color: var(--gb-ink); }
+.gb-reply { padding: 4px 8px; background: #fff6dc; box-shadow: 2px 2px 0 rgba(40, 20, 8, .32); filter: var(--gb-paper-filter); font-size: 13px; line-height: 17px; }
+.gb-reply.fresh { animation: gb-in .36s steps(3); }
+.gb-reply p { margin: 0; overflow-wrap: anywhere; }
+.gb-reply b { font-weight: 400; color: var(--gb-ink); text-decoration: underline 2px rgba(58, 32, 22, .25); text-underline-offset: 3px; }
+.gb-reply-to { color: var(--gb-ink-2); }
+.gb-reply-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--gb-ink-2); font-size: 12px; line-height: 16px; }
+.gb-reply-meta time { margin-right: auto; }
+.gb-reply-btn, .gb-reply-open, .gb-thread-more { background: none; border: 0; padding: 0 2px; color: var(--gb-ink-2); font: inherit; cursor: pointer; }
+.gb-reply-btn:hover, .gb-reply-open:hover, .gb-thread-more:hover { color: var(--gb-ink); text-decoration: underline; }
+.gb-reply-open { align-self: flex-end; padding: 2px 6px; font-size: 12px; background: rgba(255, 246, 220, .75); box-shadow: 2px 2px 0 rgba(40, 20, 8, .25); }
+.gb-thread-more { align-self: flex-start; font-size: 12px; background: rgba(255, 246, 220, .75); padding: 2px 6px; }
+.gb-reply .gb-del { width: 18px; height: 18px; margin: -2px -4px -2px 0; }
+.gb-reply-box { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: #fff6dc; box-shadow: 2px 2px 0 rgba(40, 20, 8, .32); }
+.gb-reply-box .input { min-width: 0; width: 100%; height: 30px; font-size: 13px; }
+.gb-reply-box-row { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.gb-reply-box-row > :first-child { margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-reply-box .gb-err { color: #b3261e; }
+@media (hover: hover) {
+  .gb-reply .gb-del, .gb-reply-btn { opacity: 0; }
+  .gb-reply:hover .gb-del, .gb-reply .gb-del:focus-visible, .gb-reply:hover .gb-reply-btn, .gb-reply-btn:focus-visible { opacity: .85; }
+  .gb-reply-open { opacity: 0; }
+  .gb-note:hover .gb-reply-open, .gb-reply-open:focus-visible { opacity: 1; }
+}
 .gb-note.solo { display: flex; flex-direction: column; align-items: center; gap: 6px; filter: none; }
 .gb-solo-art { display: flex; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(3px 3px 0 rgba(40, 20, 8, .38)); }
 .gb-tag { align-self: stretch; padding: 3px 8px; background: #fff6dc; box-shadow: 3px 3px 0 rgba(40, 20, 8, .38); filter: var(--gb-paper-filter); }
@@ -895,7 +921,8 @@ button.st-line.add { color: var(--ink-3); }
 @media (max-width: 520px) {
   .gb-pick-label { display: none; }
   .gb-cork { padding: 20px 8px 14px; }
-  .gb-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 10px; }
+  .gb-notes { columns: 2; column-gap: 10px; }
+  .gb-notes > .gb-note { margin-bottom: 22px; }
   .gb-paper { padding: 14px 8px 8px; }
 }
 
@@ -1092,3 +1119,4 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .pshare-preview { flex: none; }
 .pshare-preview img { max-height: min(58vh, 720px); }
 /* ---- /R-020 个人主页 ---- */
+.gb-reply-box .muted { color: var(--gb-ink-2); }

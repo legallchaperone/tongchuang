@@ -78,12 +78,14 @@ export interface Backend {
   onSignal(me: UserId, cb: (s: Signal) => void): Unsub;
 
   // R-020 留言板
-  /** newest first; RLS only returns boards of people I share a room with (and my own) */
+  /** the `limit` newest top-level notes (newest first) plus every reply under them; RLS only returns boards of people I share a room with (and my own) */
   listGuestbook(ownerId: UserId, limit: number): Promise<GuestbookEntry[]>;
-  /** leave a note on someone's board as me: text (≤ 60 characters) and/or a sticker */
-  addGuestbook(e: { ownerId: UserId; text: string; sticker: string | null }): Promise<GuestbookEntry>;
+  /** leave a note on someone's board as me: text (≤ 60 characters) and/or a sticker; with parentId it is a text-only reply under that note */
+  addGuestbook(e: { ownerId: UserId; text: string; sticker: string | null; parentId?: string | null; replyTo?: UserId | null }): Promise<GuestbookEntry>;
   /** the author or the board's owner can take a note down */
   deleteGuestbook(id: string): Promise<void>;
   /** realtime: notes added to / taken off one board (a delete may only carry the id) */
   subscribeGuestbook(ownerId: UserId, cb: (e: GuestbookEntry, kind: "insert" | "delete") => void): Unsub;
+  /** R-023: replies to me on anyone's board */
+  subscribeGuestbookReplies(me: UserId, cb: (e: GuestbookEntry) => void): Unsub;
 }

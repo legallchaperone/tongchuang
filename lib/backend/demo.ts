@@ -215,7 +215,7 @@ function seedGuestbook(): GuestbookEntry[] {
   const lin = "demo-lin", mia = "demo-mia";
   const n = (ownerId: UserId, authorId: UserId, text: string, sticker: string | null, hoursAgo: number): GuestbookEntry =>
     ({ id: uid(), ownerId, authorId, text, sticker, createdAt: now - hoursAgo * HOUR });
-  return [
+  const notes = [
     n(ME, lin, "今天的番茄钟我也打满了，一起冲！", "fist", 2.5),
     n(ME, mia, "", "coffee", 7),
     n(ME, mia, "看到你凌晨还在学，记得早点睡呀", "moon", 20),
@@ -232,6 +232,16 @@ function seedGuestbook(): GuestbookEntry[] {
     n(mia, lin, "论文读完了吗？读完讲给我听", null, 3),
     n(mia, ME, "有机化学冲鸭", "star", 30),
     n(mia, mia, "", "coffee", 80),
+  ];
+  const [a, , c, d] = notes;
+  const r = (parent: GuestbookEntry, authorId: UserId, replyTo: UserId, text: string, hoursAgo: number): GuestbookEntry =>
+    ({ ...n(parent.ownerId, authorId, text, null, hoursAgo), parentId: parent.id, replyTo });
+  return [
+    ...notes,
+    r(a, ME, lin, "冲！晚上继续", 2),
+    r(a, lin, ME, "九点图书馆见", 1.5),
+    r(c, ME, mia, "好～今天十二点前睡", 19),
+    r(d, mia, lin, "我也想看", 29),
   ];
 }
 
@@ -261,6 +271,16 @@ export function createDemoBackend(): Backend {
   /* R-020 留言板 */
   const gbSubs = new Set<{ ownerId: UserId; cb: (e: GuestbookEntry, kind: "insert" | "delete") => void }>();
   const emitGb = (e: GuestbookEntry, kind: "insert" | "delete") => gbSubs.forEach((s) => s.ownerId === e.ownerId && s.cb({ ...e }, kind));
+  const gbReplySubs = new Set<(e: GuestbookEntry) => void>();
+  const emitReply = (e: GuestbookEntry) => { if (e.replyTo === ME) gbReplySubs.forEach((cb) => cb({ ...e })); };
+  const GB_REPLIES = ["哈哈好", "收到！", "一起加油", "你也是～", "明天见", "说好了啊"];
+  /** the classmate I replied to answers back under the same note */
+  function gbReplyBack(parent: GuestbookEntry, friendId: UserId) {
+    if (!db.guestbook!.some((x) => x.id === parent.id)) return;
+    const text = GB_REPLIES[Math.floor(Math.random() * GB_REPLIES.length)];
+    const e: GuestbookEntry = { id: uid(), ownerId: parent.ownerId, authorId: friendId, text, sticker: null, createdAt: Date.now(), parentId: parent.id, replyTo: ME };
+    db.guestbook!.push(e); save(); emitGb(e, "insert"); emitReply(e);
+  }
   const sharesRoom = (a: UserId, b: UserId) => a === b || db.rooms.some((r) => r.memberIds.includes(a) && r.memberIds.includes(b));
   /** a classmate leaves me a note (and I get the toast) */
   const gbLastFrom = new Map<UserId, number>();
@@ -510,13 +530,26 @@ export function createDemoBackend(): Backend {
     onSignal(_me, cb) { sigCbs.add(cb); return () => sigCbs.delete(cb); },
 
     // R-020 留言板
-    listGuestbook: async (ownerId, limit) => delay(sharesRoom(ME, ownerId)
-      ? db.guestbook!.filter((e) => e.ownerId === ownerId).sort((a, b) => b.createdAt - a.createdAt).slice(0, limit).map((e) => ({ ...e }))
-      : []),
-    async addGuestbook({ ownerId, text: raw, sticker }) {
-      const { text, error } = checkGuestbook(raw, sticker);
+    listGuestbook: async (ownerId, limit) => {
+      if (!sharesRoom(ME, ownerId)) return delay([]);
+      const board = db.guestbook!.filter((e) => e.ownerId === ownerId);
+      const notes = board.filter((e) => !e.parentId).sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
+      const ids = new Set(notes.map((e) => e.id));
+      const replies = board.filter((e) => e.parentId && ids.has(e.parentId)).sort((a, b) => a.createdAt - b.createdAt);
+      return delay([...notes, ...replies].map((e) => ({ ...e })));
+    },
+    async addGuestbook({ ownerId, text: raw, sticker, parentId, replyTo }) {
+      const { text, error } = checkGuestbook(raw, parentId ? null : sticker);
       if (error) throw new Error(error);
       if (!sharesRoom(ME, ownerId)) throw new Error("只能给同一个自习室的同窗留言");
+      if (parentId) {
+        const parent = db.guestbook!.find((x) => x.id === parentId && x.ownerId === ownerId && !x.parentId);
+        if (!parent) throw new Error("这张便利贴已经被撕掉了");
+        const e: GuestbookEntry = { id: uid(), ownerId, authorId: ME, text, sticker: null, createdAt: Date.now(), parentId, replyTo: replyTo || null };
+        db.guestbook!.push(e); save(); emitGb(e, "insert");
+        if (replyTo && replyTo !== ME && db.profiles.some((p) => p.id === replyTo)) setTimeout(() => gbReplyBack(parent, replyTo), 2500 + Math.random() * 2000);
+        return { ...e };
+      }
       const e: GuestbookEntry = { id: uid(), ownerId, authorId: ME, text, sticker: sticker || null, createdAt: Date.now() };
       db.guestbook!.push(e); save(); emitGb(e, "insert");
       // the classmate notices and leaves one back a moment later
@@ -527,9 +560,11 @@ export function createDemoBackend(): Backend {
       const e = db.guestbook!.find((x) => x.id === id);
       if (!e) return;
       if (e.authorId !== ME && e.ownerId !== ME) throw new Error("只有留言的人和主人能撕掉它");
-      db.guestbook = db.guestbook!.filter((x) => x !== e); save(); emitGb(e, "delete");
+      const gone = db.guestbook!.filter((x) => x === e || x.parentId === e.id);
+      db.guestbook = db.guestbook!.filter((x) => !gone.includes(x)); save(); gone.forEach((x) => emitGb(x, "delete"));
     },
     subscribeGuestbook(ownerId, cb) { const s = { ownerId, cb }; gbSubs.add(s); return () => { gbSubs.delete(s); }; },
+    subscribeGuestbookReplies(_me, cb) { gbReplySubs.add(cb); return () => { gbReplySubs.delete(cb); }; },
   };
 }
 

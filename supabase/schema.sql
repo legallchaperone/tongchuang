@@ -316,6 +316,27 @@ do $$ begin
   begin alter publication supabase_realtime add table public.guestbook; exception when others then null; end;
 end $$;
 
+-- ───────────── R-023 留言回复 ─────────────
+-- 回复也是 guestbook 的一行：parent_id 指向被回复的便利贴（只回一层），reply_to 是被回复的人（用来通知 TA）。
+-- 回复只有文字。便利贴撕掉，下面的回复一起没。可重复运行。
+alter table public.guestbook add column if not exists parent_id uuid references public.guestbook(id) on delete cascade;
+alter table public.guestbook add column if not exists reply_to uuid references auth.users(id) on delete set null;
+create index if not exists guestbook_parent_idx on public.guestbook(parent_id, created_at);
+create index if not exists guestbook_reply_to_idx on public.guestbook(reply_to);
+do $$ begin
+  alter table public.guestbook add constraint guestbook_reply_text check (parent_id is null or (sticker is null and coalesce(btrim(text), '') <> ''));
+exception when duplicate_object then null; end $$;
+-- 回复必须挂在同一块留言板的顶层便利贴下
+create or replace function public.guestbook_parent_ok(p uuid, o uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p is null or exists (select 1 from public.guestbook g where g.id = p and g.owner_id = o and g.parent_id is null)
+$$;
+drop policy if exists "guestbook write" on public.guestbook;
+create policy "guestbook write" on public.guestbook for insert with check (
+  author_id = auth.uid() and (owner_id = auth.uid() or public.shares_room(auth.uid(), owner_id))
+  and public.guestbook_parent_ok(parent_id, owner_id)
+);
+
 -- ───────────── R-020 个人主页 ─────────────
 -- 幂等：可重复运行。签名、小组件列表和各自设置存在 profiles.page 里，结构：
 --   { "bio": "≤40 字", "widgets": [{ "id", "type", "size": "s"|"w", "config": {} }], "guestbook": false（关掉留言板时才有） }

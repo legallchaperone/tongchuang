@@ -409,14 +409,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (kind !== "insert" || e.authorId === me.id) return; // notes to myself are memos, no toast
       const href = `/u/${me.id}`;
       const p = profilesRef.current[e.authorId];
-      const what = e.sticker ? (e.text ? "贴了一张便利贴" : "贴了一张贴纸") : "留了一句话";
+      const what = e.parentId
+        ? (e.replyTo === me.id ? "回复了你" : `回复了${profilesRef.current[e.replyTo || ""]?.name || "同窗"}`)
+        : e.sticker ? (e.text ? "贴了一张便利贴" : "贴了一张贴纸") : "留了一句话";
       pushToast({
         title: `${p?.name || "同窗"} 在你的留言板${what}`, body: e.text || undefined, color: p?.color, ttl: 12000,
         // already looking at my board: no button to go there
         action: typeof location !== "undefined" && location.pathname === href ? undefined : { label: "去看看", href },
       });
     });
-    return off;
+    // R-023: someone answered me on another classmate's board (my own board is covered above)
+    const offR = backend.subscribeGuestbookReplies(me.id, (e) => {
+      if (e.authorId === me.id || e.ownerId === me.id) return;
+      const href = `/u/${e.ownerId}`;
+      const p = profilesRef.current[e.authorId];
+      const owner = profilesRef.current[e.ownerId];
+      pushToast({
+        title: `${p?.name || "同窗"} 在${e.authorId === e.ownerId ? "TA 的" : ` ${owner?.name || "同窗"} 的`}留言板回复了你`, body: e.text || undefined, color: p?.color, ttl: 12000,
+        action: typeof location !== "undefined" && location.pathname === href ? undefined : { label: "去看看", href },
+      });
+    });
+    return () => { off(); offR(); };
   }, [status, me, backend, pushToast]);
 
   // a streak that reaches back to the oldest loaded day may be longer: fetch my older records, doubling each time
