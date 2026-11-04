@@ -11,6 +11,7 @@ import { Feed } from "@/components/People";
 import { StudyHall } from "@/components/Hall";
 import { IBack, ICopy, IHand, IUsers } from "@/components/Icons";
 import type { UserId } from "@/lib/types";
+import { ProfileLink } from "@/components/profile/ProfileLink";
 
 export default function RoomPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,9 +84,9 @@ export default function RoomPage() {
             {board.map((b, i) => (
               <div className="r" key={b.p.id}>
                 <span className="rank">{i + 1}</span>
-                <Avatar p={b.p} size={28} showSky={false} />
+                <ProfileLink id={b.p.id} label={`${b.p.name}的主页`}><Avatar p={b.p} size={28} showSky={false} /></ProfileLink>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}><b style={{ fontWeight: 600 }}>{b.p.name}</b><span className="muted">今日 {dur(b.today)}</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13 }}><ProfileLink id={b.p.id} className="plink-name"><b style={{ fontWeight: 600 }}>{b.p.name}</b></ProfileLink><span className="muted">今日 {dur(b.today)}</span></div>
                   <div className="hbar" style={{ gridTemplateColumns: "1fr", padding: "4px 0 0" }}><div className="track"><div className="fill" style={{ width: `${(b.week / maxWeek) * 100}%`, background: seriesVar(b.p.color) }} /></div></div>
                 </div>
                 <span className="num" style={{ fontWeight: 500 }}>{hrs(b.week)}h</span>

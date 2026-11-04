@@ -286,6 +286,12 @@ do $$ begin
   begin alter publication supabase_realtime add table public.daily_reviews; exception when others then null; end;
 end $$;
 
+-- ───────────── R-020 个人主页 ─────────────
+-- 幂等：可重复运行。签名、小组件列表和各自设置存在 profiles.page 里，结构：
+--   { "bio": "≤40 字", "widgets": [{ "id", "type", "size": "s"|"w", "config": {} }], "guestbook": false（关掉留言板时才有） }
+-- 读写权限沿用 profiles 已有的 RLS：同自习室可读，只能改自己的。徽章由专注记录算出，不单独存。
+alter table public.profiles add column if not exists page jsonb;
+
 -- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
 -- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
 notify pgrst, 'reload schema';

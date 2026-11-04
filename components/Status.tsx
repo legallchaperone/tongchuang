@@ -10,6 +10,7 @@ import {
   type ActiveStatus, type StatusDuration, type StatusPrefs,
 } from "@/lib/status";
 import { IClose } from "./Icons";
+import { ProfileLink } from "./profile/ProfileLink";
 
 export function useStatusPrefs(): StatusPrefs {
   const [p, setP] = useState<StatusPrefs>({ keepOnFocus: false, showInFeed: true });
@@ -197,7 +198,7 @@ export function StatusFeedItem({ p, l, isMine, avatar }: { p?: Profile; l: LiveS
     <div className="fi st-fi">
       {avatar}
       <div style={{ minWidth: 0 }}>
-        <div className="line1"><b>{isMine ? "我" : p?.name || "同窗"}</b><span className="muted">：</span><span className="st-say"><span className="e">{s.emoji}</span>{s.text}</span></div>
+        <div className="line1"><ProfileLink id={p?.id} className="plink-name"><b>{isMine ? "我" : p?.name || "同窗"}</b></ProfileLink><span className="muted">：</span><span className="st-say"><span className="e">{s.emoji}</span>{s.text}</span></div>
         <div className="meta"><span>{ago(s.setAt, app.now)}</span>{s.until && <span>{untilLabel(s.until, viewerTz, app.now)}</span>}{!s.until && <span>直到清除</span>}</div>
       </div>
     </div>

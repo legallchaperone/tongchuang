@@ -1,6 +1,7 @@
 import type { Backend } from "./types";
 import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
-import { browserTz, DAY, dayKey, MIN, partsIn, zonedToUtc } from "../time";
+import { addDaysKey, browserTz, DAY, dayKey, MIN, partsIn, zonedToUtc } from "../time";
+import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
 
@@ -47,6 +48,48 @@ function friendsFor(myTz: string): Friend[] {
       tasks: { "有机化学": ["第 9 章 亲核取代", "反应机理卡片"], "论文阅读": ["Attention 那篇精读", "综述 第 3 节"], "法语": ["听力 B2", "动词变位"] } },
   ];
 }
+/* ── R-020: a personal page for me and each simulated classmate ── */
+function demoPage(id: UserId, tz: string): ProfilePage {
+  const inDays = (n: number) => addDaysKey(dayKey(Date.now(), tz), n);
+  if (id === "demo-lin") return {
+    bio: "刷题和背单词交替进行，凌晨的图书馆最安静",
+    widgets: [
+      { id: "l1", type: "goals", size: "s", config: { goals: [{ title: "GRE 首考", date: inDays(38) }, { title: "秋招笔试", date: inDays(75) }] } },
+      { id: "l2", type: "streak", size: "s", config: {} },
+      { id: "l3", type: "heatmap", size: "w", config: {} },
+      { id: "l4", type: "hours", size: "s", config: { days: 30 } },
+      { id: "l5", type: "subjects", size: "s", config: { days: 30 } },
+      { id: "l6", type: "badges", size: "w", config: { showLocked: false } },
+      { id: "l7", type: "recent", size: "w", config: { count: 5, hideTask: false } },
+    ],
+  };
+  if (id === "demo-mia") return {
+    bio: "Bonjour ! 化学人，正在和法语动词变位较劲",
+    widgets: [
+      { id: "m1", type: "today", size: "w", config: {} },
+      { id: "m2", type: "note", size: "s", config: { title: "这学期", text: "每天读一篇论文，周末整理成卡片。\n法语 B2 考试前不追剧。" } },
+      { id: "m3", type: "review", size: "s", config: {} },
+      { id: "m4", type: "subjects", size: "s", config: { days: 7 } },
+      { id: "m5", type: "badges", size: "s", config: { showLocked: true } },
+      { id: "m6", type: "recent", size: "w", config: { count: 3, hideTask: true } },
+    ],
+  };
+  return {
+    bio: "毕业论文 + 线代二刷，每天进步一点点",
+    widgets: [
+      { id: "me1", type: "today", size: "s", config: {} },
+      { id: "me2", type: "streak", size: "s", config: {} },
+      { id: "me3", type: "goals", size: "s", config: { goals: [{ title: "考研数学", date: inDays(52) }, { title: "论文初稿", date: inDays(20) }] } },
+      { id: "me4", type: "heatmap", size: "w", config: {} },
+      { id: "me5", type: "subjects", size: "s", config: { days: 30 } },
+      { id: "me6", type: "badges", size: "w", config: { showLocked: true } },
+      { id: "me7", type: "hours", size: "s", config: { days: 30 } },
+      { id: "me8", type: "recent", size: "w", config: { count: 5, hideTask: false } },
+      { id: "me9", type: "note", size: "s", config: { title: "座右铭", text: "慢慢来，比较快。" } },
+    ],
+  };
+}
+
 const mySubjects: [string, number][] = [["线性代数", 0], ["毕业论文", 1], ["英语阅读", 2], ["编程", 3]];
 const myTasks: Record<string, string[]> = {
   "线性代数": ["第 4 章 特征值习题", "复习 SVD", "真题 2023"], "毕业论文": ["写相关工作", "改实验图", "整理参考文献"],
@@ -162,6 +205,8 @@ export function createDemoBackend(): Backend {
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* full */ } };
   if (!db.reviews) db.reviews = seedReviews(db);
+  // R-020: older demo data has no pages yet
+  db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
   const fr = () => db.profiles.filter((p) => p.id !== ME);
   const friendDef = () => friendsFor(db.profiles.find((p) => p.id === ME)!.tz);

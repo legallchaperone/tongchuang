@@ -60,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {app.backend.mode === "demo" && <div className="demo-banner">演示模式：数据只保存在这个浏览器里，同窗是模拟的。配置 Supabase 后即可和真实好友同步。</div>}
         {app.myProfile && <StatusButton variant="rail" />}
         {app.myProfile && (
-          <Link href="/settings" className="me-chip"><Avatar p={app.myProfile} size={28} showSky={false} live={app.me ? app.live[app.me.id] : undefined} /><span>{app.myProfile.name}</span></Link>
+          <Link href={`/u/${encodeURIComponent(app.myProfile.id)}`} className="me-chip" title="我的主页"><Avatar p={app.myProfile} size={28} showSky={false} live={app.me ? app.live[app.me.id] : undefined} /><span>{app.myProfile.name}</span></Link>
         )}
       </aside>
       <main className="main">{ready ? children : app.status === "error" ? <ErrorBox msg={app.error} retry={app.reload} /> : <Spinner />}</main>
