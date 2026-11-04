@@ -110,12 +110,11 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
     case "today": {
       const pct = s.goalMs ? s.todayMs / s.goalMs : 0;
       const lw = wide ? 140 : cw;
-      T(r, "今天", x, y, p.ink3);
-      T(r, Fit(r, dur(s.todayMs), lw, 2), x, y + 14, p.ink, 2);
-      meter(r, x, y + 42, Math.min(lw, 140), pct);
-      T(r, `目标 ${durShort(s.goalMs)} · ${Math.round(pct * 100)}%`, x, y + 52, p.ink3);
-      const ww = T(r, "本周 ", x, y + 68, p.ink3);
-      T(r, `${hrs(s.weekMs)}h`, x + ww, y + 68, p.ink);
+      T(r, Fit(r, dur(s.todayMs), lw, 2), x, y, p.ink, 2);
+      meter(r, x, y + 28, Math.min(lw, 140), pct);
+      T(r, `目标 ${durShort(s.goalMs)} · ${Math.round(pct * 100)}%`, x, y + 38, p.ink3);
+      const ww = T(r, "本周 ", x, y + 54, p.ink3);
+      T(r, `${hrs(s.weekMs)}h`, x + ww, y + 54, p.ink);
       if (wide) {
         const bx = x + 156, bwid = cw - 156, slot = Math.floor(bwid / 7), barH = 50;
         const max = Math.max(s.goalMs, ...s.week.map((q) => q.ms), HOUR);
@@ -129,7 +128,7 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
           T(r, lab, cx + Math.round((slot - textW(lab)) / 2), y + 60, q.key === s.todayKey ? p.ink : p.ink3);
         });
       }
-      return 82;
+      return wide ? 72 : 68;
     }
     case "streak": {
       ctx.save(); ctx.translate(x, y + 2); ctx.scale(2, 2);
@@ -137,7 +136,7 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
       ctx.restore();
       const vw = T(r, String(s.streak.current), x + 28, y, p.ink, 2);
       T(r, "天", x + 30 + vw, y + 12, p.ink2);
-      T(r, Fit(r, s.streak.current ? `现在连续 · 最长 ${s.streak.best} 天` : `最长连续 ${s.streak.best} 天`, cw - 28), x + 28, y + 26, p.ink3);
+      T(r, Fit(r, s.streak.current ? `最长 ${s.streak.best} 天` : `最长连续 ${s.streak.best} 天`, cw - 28), x + 28, y + 26, p.ink3);
       const cells = s.yearCols.flat().filter((c) => !c.future).slice(-(wide ? 28 : 14));
       const step = Math.min(10, Math.floor(cw / cells.length));
       cells.forEach((c, i) => {
@@ -156,7 +155,7 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
         rect(ctx, x + ci * step, y + di * step, step - 1, step - 1, p.q[lv]);
       }));
       const gy = y + 7 * step + 4;
-      T(r, Fit(r, `最近 ${n} 周 · ${s.activeDays} 天有记录`, cw - 70), x, gy, p.ink3);
+      T(r, `${s.activeDays} 天`, x, gy, p.ink3);
       let lx = x + cw - 6 * 7 - textW("多") - 2;
       for (let i = 0; i < 6; i++) rect(ctx, lx + i * 7, gy + 4, 6, 6, p.q[i]);
       lx += 6 * 7 + 2;
@@ -166,31 +165,28 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
     case "subjects": {
       const parts = s.subjects[w.config.days === 7 ? 7 : 30];
       const total = parts.reduce((a, q) => a + q.ms, 0);
-      T(r, `最近 ${w.config.days === 7 ? 7 : 30} 天`, x, y, p.ink3);
-      if (!total) { T(r, "这段时间还没有记录", x, y + 16, p.ink3); return 30; }
+      if (!total) { T(r, "这段时间还没有记录", x, y, p.ink3); return 14; }
       const top = parts.slice(0, wide ? 5 : 4);
       const restMs = total - top.reduce((a, q) => a + q.ms, 0);
       const items = restMs > 0 ? [...top, { key: "__o", name: "其他", color: null, ms: restMs }] : top;
       const cell = wide ? 3 : 2, N = 28, size = N * cell;
-      donut(r, x, y + 16, cell, items.map((q) => ({ ms: q.ms, color: q.key === "__o" ? p.ink3 : subjColor(r, q) })));
+      donut(r, x, y, cell, items.map((q) => ({ ms: q.ms, color: q.key === "__o" ? p.ink3 : subjColor(r, q) })));
       const lx = x + size + 8, lw = cw - size - 8;
       items.forEach((q, i) => {
-        const ly = y + 16 + i * 14;
+        const ly = y + i * 14;
         rect(ctx, lx, ly + 3, 7, 7, p.edge); rect(ctx, lx + 1, ly + 4, 5, 5, q.key === "__o" ? p.ink3 : subjColor(r, q));
         const pct = `${Math.round((q.ms / total) * 100)}%`;
         const pw = textW(pct);
         T(r, Fit(r, q.name, lw - 14 - pw - 4), lx + 11, ly, p.ink2);
         T(r, pct, lx + lw - pw, ly, p.ink);
       });
-      return 16 + Math.max(size, items.length * 14);
+      return Math.max(size, items.length * 14);
     }
     case "hours": {
       const hours = s.hours[w.config.days === 90 ? 90 : 30];
       const pk = peakWindow(hours);
       if (!pk) { T(r, "这段时间还没有记录", x, y, p.ink3); return 14; }
-      const lw = T(r, "最常在 ", x, y, p.ink2);
-      const vw = T(r, peakLabel(pk), x + lw, y, p.ink);
-      T(r, " 学习", x + lw + vw, y, p.ink2);
+      T(r, peakLabel(pk), x, y, p.ink);
       const max = Math.max(...hours, 1), slot = Math.floor(cw / 24), bh = 34, by = y + 18;
       const ox = x + Math.floor((cw - slot * 24) / 2);
       hours.forEach((v, h) => {
@@ -263,7 +259,8 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
     }
     case "badges": {
       const earned = s.badges.filter((b) => b.earned);
-      const list = w.config.showLocked !== false ? [...earned, ...s.badges.filter((b) => !b.earned)] : earned;
+      // the picture is for people outside the app: only what was earned
+      const list = earned;
       if (!list.length) { T(r, "还没有徽章", x, y, p.ink3); return 14; }
       const cell = wide ? 60 : 36, mh = MEDAL_H * 2, perRow = Math.max(1, Math.floor(cw / cell));
       const rows = Math.ceil(list.length / perRow), rowH = mh + (wide ? 18 : 6);
@@ -318,7 +315,7 @@ function layout(ctx: C, d: ProfileCardData, theme: CardTheme, glyphs: string[], 
   }
   const tx = 88, tw = W - tx - PAD;
   T(r, Fit(r, d.name, tw, 2), tx, 24, p.ink, 2);
-  T(r, Fit(r, `${d.city} · 同窗主页`, tw), tx, 52, p.ink2);
+  T(r, Fit(r, d.city, tw), tx, 52, p.ink2);
   let y = 66;
   if (d.bio) {
     const lines = wrap(r, `“${d.bio}”`, tw, 3);

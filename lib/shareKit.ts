@@ -186,10 +186,10 @@ export function drawShareFooter(ctx: CanvasRenderingContext2D, x: number, y: num
   logo(ctx, x + 2, cy - 22, p);
   text(ctx, "同窗", x + 20, cy - 26, p.ink, 2);
   text(ctx, "隔着时差，一起自习", x + 2, cy + 2, p.ink2);
-  text(ctx, "扫码看看 · study.cwx.world", x + 2, cy + 16, p.ink3);
+  text(ctx, "study.cwx.world", x + 2, cy + 16, p.ink3);
 }
 /** glyphs the footer needs (pass to ensureCardFont together with the card's own text) */
-export const FOOTER_TEXT = "同窗隔着时差，一起自习扫码看看 · study.cwx.world";
+export const FOOTER_TEXT = "同窗隔着时差，一起自习study.cwx.world";
 
 /** draw at native size with `draw`, then scale up by `scale` into a PNG (blob + data URL) */
 export async function renderPixelPng(w: number, h: number, scale: number, glyphs: string, draw: (ctx: CanvasRenderingContext2D) => void): Promise<{ blob: Blob; url: string }> {

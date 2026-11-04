@@ -137,9 +137,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, d: ShareData, theme: Car
   ctx.save(); ctx.translate(wx + 3, wy + 3 + 48 - g.length * 3); ctx.scale(3, 3); drawGrid(ctx, g, 0, 0); ctx.restore();
 
   const tx = 88;
-  text(ctx, fit(titleOf(d), W - tx - 20, 2), tx, 24, p.ink, 2);
-  text(ctx, "最近一年的庄稼长势", tx, 52, p.ink2);
-  text(ctx, `${fmtDate(d.from)} – ${fmtDate(d.to)}`, tx, 66, p.ink3);
+  text(ctx, fit(titleOf(d), W - tx - 20, 2), tx, 36, p.ink, 2);
 
   // divider
   for (let x = 22; x < W - 22; x += 4) rect(ctx, x, 86, 2, 1, p.slot);
@@ -152,7 +150,6 @@ export function drawCard(ctx: CanvasRenderingContext2D, d: ShareData, theme: Car
 
   // legend
   const ly = 290;
-  text(ctx, "一格是一天", hx - 15, ly, p.ink3);
   let lx = hx + half * 11 - 2;
   const lw = 6 * 11 - 2;
   lx -= textW("多") + 4 + lw + 4 + textW("少");

@@ -200,10 +200,10 @@ const X = 22, CW = DAY_W - 44;
 
 function layout(d: DayData) {
   let y = 118; // header ends at 108
-  const total = { y, h: 56 }; y += 56 + 12;
+  const total = { y, h: 40 }; y += 40 + 12;
   const cut = d.blocks.some((b) => b.cutL || b.cutR);
-  const tl = { y, h: 32 + 20 + 16 + (cut ? 14 : 0) }; y += tl.h + 10;
-  const subj = d.slices.length ? { y, h: 20 + Math.max(68, d.slices.length * 15) } : null; if (subj) y += subj.h + 6;
+  const tl = d.blocks.length ? { y, h: 32 + 20 + 16 } : null; if (tl) y += tl.h + 10;
+  const subj = d.slices.length ? { y, h: Math.max(68, d.slices.length * 15) } : null; if (subj) y += subj.h + 6;
   const longest = d.longest ? { y, h: 40 } : null; if (longest) y += 40 + 8;
   const noteLines = d.review?.note ? wrap(d.review.note, CW - 16 - textW("明天先："), 2).length : 0;
   const review = d.review ? { y, h: 20 + 22 + (noteLines ? 6 + noteLines * 14 : 0) + 8 } : null; if (review) y += review.h + 8;
@@ -247,25 +247,21 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
   text(ctx, fit(titleOf(d), tw), tx, 24, p.ink2);
   const dw = text(ctx, fmtDay(d.day), tx, 40, p.ink, 2);
   text(ctx, "星期" + weekdayCn[weekdayOfKey(d.day)], tx + dw + 6, 52, p.ink2);
-  text(ctx, fit(`${d.day.slice(0, 4)} · ${tzCity(d.tz)}当地时间`, tw), tx, 72, p.ink3);
-  if (d.span) text(ctx, `${d.span[0]} – ${d.live ? "进行中" : d.span[1]}`, tx, 87, p.ink2);
-  // a short tally under the time range
-  const tally = d.count ? `${d.count} 次专注${d.pomos ? ` · ${d.pomos} 个番茄` : ""}` : "这一天没有专注记录";
-  text(ctx, fit(tally, tw), tx, d.span ? 101 : 87, p.ink3);
+  const tally = d.count ? `${d.count} 次专注${d.pomos ? ` · ${d.pomos} 个番茄` : ""}` : "没有专注记录";
+  text(ctx, fit(tally, tw), tx, 76, p.ink3);
 
   /* total + goal */
   {
     const { y, h } = L.total;
     tile(ctx, X, y, CW, h, p);
-    text(ctx, "当天专注", X + 8, y + 5, p.ink3);
-    text(ctx, fit(durTxt(d.totalMs), 150, 2), X + 8, y + 20, p.ink, 2);
+    text(ctx, fit(durTxt(d.totalMs), 150, 2), X + 8, y + Math.round(h / 2) - 13, p.ink, 2);
     const gx = X + 170, gw = CW - 170 - 10;
     const pct = d.goalMs > 0 ? Math.round((d.totalMs / d.goalMs) * 100) : 0;
     text(ctx, `目标 ${durTxt(d.goalMs)}`, gx, y + 5, p.ink3);
-    const pt = pct >= 100 ? `${pct}% 达成` : `${pct}%`;
+    const pt = `${pct}%`;
     text(ctx, pt, gx + gw - textW(pt), y + 5, pct >= 100 ? (p.night ? "#9ed36a" : "#2f7a2c") : p.ink2);
     // segmented pixel bar
-    const by = y + 23, bh = 12;
+    const by = y + 20, bh = 12;
     rect(ctx, gx, by, gw, bh, p.edge);
     rect(ctx, gx + 1, by + 1, gw - 2, bh - 2, p.slot);
     const fillW = Math.round((gw - 2) * Math.min(1, pct / 100));
@@ -276,13 +272,11 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
       rect(ctx, gx + 1, by + bh - 3, fillW, 2, goodDk);
       for (let sx = gx + 1 + 9; sx < gx + 1 + fillW; sx += 10) rect(ctx, sx, by + 1, 1, bh - 2, goodDk);
     }
-    text(ctx, pct >= 100 ? "目标完成了" : `还差 ${durTxt(Math.max(0, d.goalMs - d.totalMs))}`, gx, by + bh + 3, p.ink3);
   }
 
   /* timeline */
-  {
+  if (L.tl) {
     const y0 = L.tl.y;
-    tag(ctx, "时间线", X, y0, p);
     // legend of the modes used, right-aligned on the tag row
     const modes = (["pomodoro", "stopwatch", "countdown"] as FocusMode[]).filter((m) => d.blocks.some((b) => b.mode === m));
     let lx = X + CW;
@@ -335,7 +329,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
       const cx = Math.round(x0 + w / 2) - 3;
       if (cx >= lastIcon + 8) { modeIcon(ctx, b.mode, Math.max(X, Math.min(X + CW - 7, cx)), iy, p); lastIcon = cx; }
     });
-    if (!d.blocks.length) { const m = "这一天没有专注记录"; text(ctx, m, X + Math.round((CW - textW(m)) / 2), ty + 3, p.ink3); }
+    if (!d.blocks.length) { const m = "没有专注记录"; text(ctx, m, X + Math.round((CW - textW(m)) / 2), ty + 3, p.ink3); }
     // ticks + labels
     const labels: { x: number; w: number; t: string }[] = [];
     for (let h = h0; h <= h1; h += step) {
@@ -352,20 +346,15 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
       text(ctx, l.t, l.x, ty + th + 4, p.ink3);
       lastEnd = l.x + l.w;
     });
-    if (L.cut) text(ctx, "跨过午夜的一段只画了这一天的部分", X, ty + th + 19, p.ink3);
   }
 
   /* subjects */
   if (L.subj) {
     const y0 = L.subj.y;
-    tag(ctx, "科目", X, y0, p);
     const n = 32, cell = 2, size = n * cell;
-    const dy = y0 + 22;
+    const dy = y0;
     donut(ctx, X + 6, dy, n, cell, d.slices.map((s) => ({ ms: s.ms, color: sc(s.color) })), p.slot);
     const tot = d.slices.reduce((a, s) => a + s.ms, 0) || 1;
-    // the hole shows the day's total, like the donut on the stats page
-    const pc = durShort(tot);
-    text(ctx, pc, X + 6 + Math.round((size - textW(pc)) / 2), dy + size / 2 - 6, p.ink);
     const lx = X + 6 + size + 18, rw = X + CW - lx;
     const rows = d.slices.length;
     const ly = dy + Math.max(0, Math.round((size - rows * 15) / 2));
@@ -387,8 +376,6 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
     const { y, h } = L.longest, l = d.longest;
     tile(ctx, X, y, CW, h, p);
     text(ctx, "最长的一次", X + 8, y + 4, p.ink3);
-    const range = `${l.from} – ${l.to}`;
-    text(ctx, range, X + CW - 8 - textW(range), y + 4, p.ink3);
     const ry = y + 20;
     modeIcon(ctx, l.mode, X + 8, ry + 2, p);
     const c = sc(l.color);
@@ -436,7 +423,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
 
 /** render the full-size PNG */
 export async function renderDayCard(d: DayData, theme: CardTheme, hide: boolean, scale = DAY_SCALE): Promise<{ blob: Blob; url: string }> {
-  const glyphs = dayText(d, hide) + "目标完成了还差hm";
+  const glyphs = dayText(d, hide) + "hm";
   // the height depends on how the 收工 note wraps, so measure with the real font first
   await ensureCardFont(glyphs + FOOTER_TEXT);
   resetMeasure();
