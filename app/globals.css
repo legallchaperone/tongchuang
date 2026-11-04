@@ -893,4 +893,30 @@ button.st-line.add { color: var(--ink-3); }
   .gb-cork { padding: 20px 8px 14px; }
   .gb-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 10px; }
   .gb-paper { padding: 14px 8px 8px; }
+
+/* ---- R-021 分享一天 ---- */
+.hero { position: relative; }
+.day-share-hero { position: absolute; top: 6px; right: 6px; z-index: 1; }
+.day-hide { font-size: 13px; color: var(--ink-2); }
+/* sheets opened from the data page stay fully opaque while older records load */
+.page[aria-busy="true"] .scrim .card { opacity: 1; }
+/* the goal line sits over the bars: let clicks reach the day underneath */
+.chart .goal { pointer-events: none; }
+.day-peek { width: min(480px, 100%); gap: 12px; padding: 8px; }
+.peek-total { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: end; }
+.peek-big { font-size: 32px; line-height: 36px; }
+.peek-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 40vh; overflow: auto; }
+.peek-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 4px 6px; background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--slot); font-size: 13px; }
+.peek-when { font-size: 12px; white-space: nowrap; }
+.peek-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peek-what .dot { margin-right: 6px; }
+.peek-what b { font-weight: 400; color: var(--ink); }
+.peek-sub { font-size: 12px; margin-top: -6px; }
+.peek-review { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 10px; background: var(--panel-2); box-shadow: 0 0 0 2px var(--slot); font-size: 13px; }
+.peek-review b { font-weight: 400; color: var(--ink); }
+.peek-note { flex-basis: 100%; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .peek-total { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .peek-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .peek-when { grid-column: 1 / -1; }
 }

@@ -10,6 +10,7 @@ import { DeskScene } from "@/components/Pixel";
 import { foldSlices, PixelDonut } from "@/components/Charts";
 import { IBack } from "@/components/Icons";
 import { EnergyFace, MoonIcon } from "@/components/Wrap";
+import { ShareDayButton } from "@/components/DayShare";
 import { msOnDay } from "@/lib/stats";
 import { dayLabel, ENERGY, IMPACT, workDay, workDaySessions } from "@/lib/review";
 import { dayKey, dur, MIN, partsIn, weekdayCn } from "@/lib/time";
@@ -112,6 +113,7 @@ export default function WrapPage() {
             <p>灯关了。同窗会看到你收工了，书桌会一直暗着，直到明天或者你再开始专注。</p>
             {note.trim() && <p className="wrap-tomorrow"><span className="muted">明天先：</span>{note.trim()}</p>}
             <div className="wrap-actions">
+              <ShareDayButton day={wd} label={wd === today ? "分享今天" : "分享这一天"} className="btn" />
               <Link className="btn" href="/stats">看看数据</Link>
               <Link className="btn primary lg" href="/">回到书房</Link>
             </div>

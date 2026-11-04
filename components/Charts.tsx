@@ -18,8 +18,10 @@ import { dur, durShort, HOUR, hhmm, MIN, partsIn, phaseAt, startOfDay, tzCity, w
 import { Avatar, seriesVar } from "./bits";
 
 /* ───────── stacked daily bars (by subject) with goal line ───────── */
-export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey }: {
+export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey, onPickDay }: {
   rows: { key: string; total: number; parts: Map<string | null, number> }[]; subjects: Subject[]; goalMs: number; height?: number; todayKey?: string;
+  /** R-021: clicking a day's column */
+  onPickDay?: (key: string) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [ref, W] = useWidth();
@@ -62,7 +64,8 @@ export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey }: {
                   {r.key === todayKey ? "今天" : n <= 7 ? "周" + weekdayCn[weekdayOfKey(r.key)] : r.key.slice(5).replace("-", "/")}
                 </text>
               )}
-              <rect x={padL + i * slot} y={0} width={slot} height={H - padB} fill="transparent" onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} tabIndex={-1} />
+              <rect x={padL + i * slot} y={0} width={slot} height={H - padB} fill="transparent" onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} tabIndex={-1}
+                onClick={onPickDay && (() => onPickDay(r.key))} style={onPickDay ? { cursor: "pointer" } : undefined} />
             </g>
           );
         })}
@@ -90,7 +93,7 @@ function roundTop(x: number, y: number, w: number, h: number, _r: number) {
 /* ───────── year heatmap ───────── */
 const LEVELS = [0, 0.5 * HOUR, 1.5 * HOUR, 3 * HOUR, 5 * HOUR];
 const level = (ms: number) => (ms <= 0 ? 0 : LEVELS.filter((l) => ms >= l).length);
-export function Heatmap({ cols }: { cols: { key: string; ms: number; future: boolean }[][] }) {
+export function Heatmap({ cols, onPickDay }: { cols: { key: string; ms: number; future: boolean }[][]; /** R-021: clicking a day */ onPickDay?: (key: string) => void }) {
   const [hover, setHover] = useState<{ key: string; ms: number; x: number; y: number } | null>(null);
   const months: { col: number; label: string }[] = [];
   cols.forEach((c, i) => { const d = c[0].key; if (i === 0 || d.slice(5, 7) !== cols[i - 1][0].key.slice(5, 7)) months.push({ col: i, label: Number(d.slice(5, 7)) + "月" }); });
@@ -105,8 +108,9 @@ export function Heatmap({ cols }: { cols: { key: string; ms: number; future: boo
           <div className="wd">{["一", "", "三", "", "五", "", "日"].map((d, i) => <span key={i} style={{ lineHeight: 1, alignSelf: "center" }}>{d}</span>)}</div>
           <div className="heat" style={{ gridTemplateColumns: `repeat(${cols.length}, 1fr)` }}>
             {cols.flatMap((c, ci) => c.map((d, di) => (
-              <div key={d.key} className="c" style={{ background: d.future ? "transparent" : `var(--q${level(d.ms)})` }}
-                onMouseEnter={() => !d.future && setHover({ key: d.key, ms: d.ms, x: (ci + 0.5) / cols.length, y: di / 7 })} />
+              <div key={d.key} className="c" style={{ background: d.future ? "transparent" : `var(--q${level(d.ms)})`, cursor: onPickDay && !d.future ? "pointer" : undefined }}
+                onMouseEnter={() => !d.future && setHover({ key: d.key, ms: d.ms, x: (ci + 0.5) / cols.length, y: di / 7 })}
+                onClick={onPickDay && !d.future ? () => onPickDay(d.key) : undefined} />
             )))}
           </div>
         </div>

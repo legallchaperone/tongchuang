@@ -171,12 +171,14 @@ export const FOOTER_H = 76;
  */
 export function drawShareFooter(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, p: Pal, from: string) {
   for (let i = x; i < x + w; i += 4) rect(ctx, i, y, 2, 1, p.slot);
-  const qx = x + w - 1, qy = y + 4;
+  // the code sits on even native coordinates: shown at half the ×3 export its 6 px modules then still land
+  // on whole pixels (an odd offset blurs every module edge, and some decoders give up)
+  const qx = x + w - 1, qy = (y + 4) & ~1;
   // QR: 2 px per module at native size → 6 px per module in the ×3 export, so it still scans when the
   // picture is shown small (a chat thumbnail, another phone's screen)
   const mat = qrMatrix(shareUrl(from));
   const qs = (mat.length + 4) * 2;
-  const qLeft = qx - qs;
+  const qLeft = (qx - qs) & ~1;
   rect(ctx, qLeft - 1, qy - 1, qs + 2, qs + 2, p.edge);
   drawQr(ctx, shareUrl(from), qLeft, qy, 2, 2);
   // brand block, vertically centred on the code

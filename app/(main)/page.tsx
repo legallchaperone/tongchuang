@@ -13,6 +13,7 @@ import { DailyBars, foldSlices, PixelDonut } from "@/components/Charts";
 import { IPlay } from "@/components/Icons";
 import { StatusButton } from "@/components/Status";
 import { WrapButton, YesterdayNote } from "@/components/Wrap";
+import { ShareDayButton } from "@/components/DayShare";
 
 function greeting(h: number) {
   if (h < 5) return "夜深了";
@@ -83,6 +84,7 @@ export default function TodayPage() {
       <div className="grid-2 today">
         <div className="stack">
           <section className="card hero" style={{ order: 1 }}>
+            <ShareDayButton className="btn sm ghost share-btn day-share-hero" label="分享" />
             <Ring value={todayMs / goal} size={136}>
               <div>
                 <div className="num big2">{Math.round((todayMs / goal) * 100)}%</div>
