@@ -402,6 +402,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; off(); };
   }, [status, me, idsKey, backend]);
 
+  // R-020 留言板: someone left a note on my board → a toast on whatever page I'm on
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    const off = backend.subscribeGuestbook(me.id, (e, kind) => {
+      if (kind !== "insert" || e.authorId === me.id) return; // notes to myself are memos, no toast
+      const href = `/u/${me.id}`;
+      const p = profilesRef.current[e.authorId];
+      const what = e.sticker ? (e.text ? "贴了一张便利贴" : "贴了一张贴纸") : "留了一句话";
+      pushToast({
+        title: `${p?.name || "同窗"} 在你的留言板${what}`, body: e.text || undefined, color: p?.color, ttl: 12000,
+        // already looking at my board: no button to go there
+        action: typeof location !== "undefined" && location.pathname === href ? undefined : { label: "去看看", href },
+      });
+    });
+    return off;
+  }, [status, me, backend, pushToast]);
+
   // a streak that reaches back to the oldest loaded day may be longer: fetch my older records, doubling each time
   useEffect(() => {
     if (status !== "ready" || !me) return;

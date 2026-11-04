@@ -1,4 +1,4 @@
-import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -76,4 +76,14 @@ export interface Backend {
   /** direct signals: poke / cheer / invite */
   sendSignal(s: Signal): Promise<void>;
   onSignal(me: UserId, cb: (s: Signal) => void): Unsub;
+
+  // R-020 留言板
+  /** newest first; RLS only returns boards of people I share a room with (and my own) */
+  listGuestbook(ownerId: UserId, limit: number): Promise<GuestbookEntry[]>;
+  /** leave a note on someone's board as me: text (≤ 60 characters) and/or a sticker */
+  addGuestbook(e: { ownerId: UserId; text: string; sticker: string | null }): Promise<GuestbookEntry>;
+  /** the author or the board's owner can take a note down */
+  deleteGuestbook(id: string): Promise<void>;
+  /** realtime: notes added to / taken off one board (a delete may only carry the id) */
+  subscribeGuestbook(ownerId: UserId, cb: (e: GuestbookEntry, kind: "insert" | "delete") => void): Unsub;
 }

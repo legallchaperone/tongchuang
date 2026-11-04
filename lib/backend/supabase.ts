@@ -1,6 +1,7 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import { checkGuestbook, GB_MISSING } from "../guestbook";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ts = (v: any) => (v ? new Date(v).getTime() : null);
@@ -365,5 +366,55 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       }).subscribe();
       return () => { sb.removeChannel(ch); };
     },
+
+    // R-020 留言板
+    async listGuestbook(ownerId, limit) {
+      const { data, error } = await sb.from("guestbook").select("*").eq("owner_id", ownerId)
+        .order("created_at", { ascending: false }).limit(limit);
+      if (error) throw guestbookError(error);
+      return (data as any[]).map(toGuestbook);
+    },
+    async addGuestbook(e) {
+      const { text, error: bad } = checkGuestbook(e.text, e.sticker);
+      if (bad) throw new Error(bad);
+      const { data, error } = await sb.from("guestbook")
+        .insert({ owner_id: e.ownerId, author_id: await myId(), text: text || null, sticker: e.sticker || null })
+        .select().single();
+      if (error) throw guestbookError(error);
+      return toGuestbook(data);
+    },
+    async deleteGuestbook(id) {
+      // RLS lets only the author and the owner delete; a note that is already gone is not an error
+      const { error } = await sb.from("guestbook").delete().eq("id", id);
+      if (error) throw guestbookError(error);
+    },
+    subscribeGuestbook(ownerId, cb) {
+      const ch = sb.channel("gb-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `owner_id=eq.${ownerId}` }, (p: any) => {
+          if (p.new?.id) cb(toGuestbook(p.new), "insert");
+        })
+        // DELETE events cannot be filtered and, with RLS on, only carry the id: unknown ids are ignored by the board
+        .on("postgres_changes", { event: "DELETE", schema: "public", table: "guestbook" }, (p: any) => {
+          const o = p.old;
+          if (!o?.id || (o.owner_id && o.owner_id !== ownerId)) return;
+          cb(toGuestbook({ ...o, owner_id: o.owner_id || ownerId }), "delete");
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
   };
+}
+
+const toGuestbook = (r: any): GuestbookEntry => ({
+  id: r.id, ownerId: r.owner_id, authorId: r.author_id || "", text: r.text || "", sticker: r.sticker || null, createdAt: ts(r.created_at) || 0,
+});
+/** R-020: the usual failures in plain Chinese */
+function guestbookError(e: { message: string; code?: string }): Error {
+  const m = e.message || "";
+  if (e.code === "42P01" || e.code === "PGRST205" || (/guestbook/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(GB_MISSING);
+  if (/row-level security/i.test(m)) return new Error("只能给同一个自习室的同窗留言");
+  if (/guestbook_text_check/.test(m)) return new Error("最多 60 个字");
+  if (/guestbook_not_empty/.test(m)) return new Error("写句话或者选张贴纸吧");
+  if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
+  return new Error(m);
 }

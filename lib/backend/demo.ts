@@ -1,6 +1,7 @@
 import type { Backend } from "./types";
-import type { AuthUser, DailyReview, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
-import { browserTz, DAY, dayKey, MIN, partsIn, zonedToUtc } from "../time";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import { browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
+import { checkGuestbook } from "../guestbook";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
 
@@ -19,6 +20,8 @@ type DB = {
   live: LiveStatus[]; kudos: Kudos[]; seededAt: number;
   /** R-007; added lazily to older demo data */
   reviews?: DailyReview[];
+  /** R-020 留言板; added lazily to older demo data */
+  guestbook?: GuestbookEntry[];
 };
 
 function rng(seed: number) {
@@ -157,11 +160,44 @@ function seedReviews(db: DB): DailyReview[] {
   return out;
 }
 
+/* ── R-020 留言板: a few notes on everyone's board ── */
+const GB_RANDOM: [string, string | null][] = [
+  ["路过，给你打个气", "fist"], ["", "coffee"], ["今天也在认真学呢", "star"], ["", "flower"], ["别熬太晚", "moon"], ["冲！", "flame"],
+];
+const GB_THANKS: [string, string | null][] = [
+  ["谢谢！你也加油", "fist"], ["收到～回你一张", "heart"], ["", "coffee"], ["一起努力！", "star"], ["哈哈被你发现了", "cat"],
+];
+function seedGuestbook(): GuestbookEntry[] {
+  const now = Date.now();
+  const lin = "demo-lin", mia = "demo-mia";
+  const n = (ownerId: UserId, authorId: UserId, text: string, sticker: string | null, hoursAgo: number): GuestbookEntry =>
+    ({ id: uid(), ownerId, authorId, text, sticker, createdAt: now - hoursAgo * HOUR });
+  return [
+    n(ME, lin, "今天的番茄钟我也打满了，一起冲！", "fist", 2.5),
+    n(ME, mia, "", "coffee", 7),
+    n(ME, mia, "看到你凌晨还在学，记得早点睡呀", "moon", 20),
+    n(ME, lin, "线代那章真的难，你的笔记借我看看？", null, 30),
+    n(ME, ME, "备忘：周五之前交开题报告", "book", 50),
+    n(ME, mia, "", "flower", 75),
+    n(ME, lin, "连续 7 天了，厉害", "trophy", 100),
+    n(ME, mia, "法语考过了！谢谢你那天陪我自习", "heart", 140),
+    n(ME, lin, "", "cat", 190),
+    n(ME, mia, "伦敦今天出彩虹了，分你一半", "rainbow", 260),
+    n(lin, mia, "GRE 加油！", "fist", 5),
+    n(lin, ME, "", "tomato", 26),
+    n(lin, lin, "目标：周赛进前 500", "flame", 60),
+    n(mia, lin, "论文读完了吗？读完讲给我听", null, 3),
+    n(mia, ME, "有机化学冲鸭", "star", 30),
+    n(mia, mia, "", "coffee", 80),
+  ];
+}
+
 export function createDemoBackend(): Backend {
   let db: DB;
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* full */ } };
   if (!db.reviews) db.reviews = seedReviews(db);
+  if (!db.guestbook) db.guestbook = seedGuestbook();
   save();
   const fr = () => db.profiles.filter((p) => p.id !== ME);
   const friendDef = () => friendsFor(db.profiles.find((p) => p.id === ME)!.tz);
@@ -176,6 +212,20 @@ export function createDemoBackend(): Backend {
   const emitKudos = (k: Kudos, kind: "insert" | "delete") => subs.forEach((s) => s.h.onKudos(k, kind));
   const reviewSubs = new Set<{ ids: Set<UserId>; cb: (r: DailyReview) => void }>();
   const emitReview = (r: DailyReview) => reviewSubs.forEach((s) => s.ids.has(r.userId) && s.cb(r));
+
+  /* R-020 留言板 */
+  const gbSubs = new Set<{ ownerId: UserId; cb: (e: GuestbookEntry, kind: "insert" | "delete") => void }>();
+  const emitGb = (e: GuestbookEntry, kind: "insert" | "delete") => gbSubs.forEach((s) => s.ownerId === e.ownerId && s.cb({ ...e }, kind));
+  const sharesRoom = (a: UserId, b: UserId) => a === b || db.rooms.some((r) => r.memberIds.includes(a) && r.memberIds.includes(b));
+  /** a classmate leaves me a note (and I get the toast) */
+  const gbLastFrom = new Map<UserId, number>();
+  function gbFromFriend(friendId: UserId, pickFrom: [string, string | null][]) {
+    if ((gbLastFrom.get(friendId) || 0) > Date.now() - 2 * MIN) return; // not twice in a row
+    gbLastFrom.set(friendId, Date.now());
+    const [text, sticker] = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    const e: GuestbookEntry = { id: uid(), ownerId: ME, authorId: friendId, text, sticker, createdAt: Date.now() };
+    db.guestbook!.push(e); save(); emitGb(e, "insert");
+  }
 
   /** an accepted invite overrides the schedule for a while */
   const holdUntil = new Map<UserId, number>();
@@ -263,6 +313,8 @@ export function createDemoBackend(): Backend {
           if (rv) { rv.createdAt = rv.updatedAt = now; db.reviews!.push(rv); emitReview(rv); }
         }
       }
+      // R-020: now and then, an awake classmate on a break leaves a note on my board (about once an hour or two)
+      if (!block && p.h >= 9 && p.h < 23 && Math.random() < 1 / 400) gbFromFriend(f.id, GB_RANDOM);
     }
     save();
   }
@@ -411,6 +463,28 @@ export function createDemoBackend(): Backend {
     },
     async sendSignal(s) { reply(s); },
     onSignal(_me, cb) { sigCbs.add(cb); return () => sigCbs.delete(cb); },
+
+    // R-020 留言板
+    listGuestbook: async (ownerId, limit) => delay(sharesRoom(ME, ownerId)
+      ? db.guestbook!.filter((e) => e.ownerId === ownerId).sort((a, b) => b.createdAt - a.createdAt).slice(0, limit).map((e) => ({ ...e }))
+      : []),
+    async addGuestbook({ ownerId, text: raw, sticker }) {
+      const { text, error } = checkGuestbook(raw, sticker);
+      if (error) throw new Error(error);
+      if (!sharesRoom(ME, ownerId)) throw new Error("只能给同一个自习室的同窗留言");
+      const e: GuestbookEntry = { id: uid(), ownerId, authorId: ME, text, sticker: sticker || null, createdAt: Date.now() };
+      db.guestbook!.push(e); save(); emitGb(e, "insert");
+      // the classmate notices and leaves one back a moment later
+      if (ownerId !== ME && db.profiles.some((p) => p.id === ownerId)) setTimeout(() => gbFromFriend(ownerId, GB_THANKS), 2500 + Math.random() * 2000);
+      return { ...e };
+    },
+    async deleteGuestbook(id) {
+      const e = db.guestbook!.find((x) => x.id === id);
+      if (!e) return;
+      if (e.authorId !== ME && e.ownerId !== ME) throw new Error("只有留言的人和主人能撕掉它");
+      db.guestbook = db.guestbook!.filter((x) => x !== e); save(); emitGb(e, "delete");
+    },
+    subscribeGuestbook(ownerId, cb) { const s = { ownerId, cb }; gbSubs.add(s); return () => { gbSubs.delete(s); }; },
   };
 }
 

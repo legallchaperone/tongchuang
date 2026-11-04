@@ -286,6 +286,36 @@ do $$ begin
   begin alter publication supabase_realtime add table public.daily_reviews; exception when others then null; end;
 end $$;
 
+-- ───────────── R-020 留言板（贴纸墙） ─────────────
+-- 主页上的便利贴：一句短话（≤ 60 字）和/或一张像素贴纸（贴纸 id 由前端定义，如 'coffee'）。
+-- 同自习室的人能看、能给对方留言；自己也能给自己留（当备忘）。留言的人和主人都能撕掉，不能修改。可重复运行。
+create table if not exists public.guestbook (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete cascade,
+  text text check (char_length(text) <= 60),
+  sticker text check (char_length(sticker) <= 32),
+  created_at timestamptz not null default now(),
+  constraint guestbook_not_empty check (coalesce(btrim(text), '') <> '' or coalesce(sticker, '') <> '')
+);
+create index if not exists guestbook_owner_idx on public.guestbook(owner_id, created_at desc);
+
+alter table public.guestbook enable row level security;
+drop policy if exists "guestbook read" on public.guestbook;
+create policy "guestbook read" on public.guestbook for select using (public.shares_room(auth.uid(), owner_id));
+drop policy if exists "guestbook write" on public.guestbook;
+create policy "guestbook write" on public.guestbook for insert with check (
+  author_id = auth.uid() and (owner_id = auth.uid() or public.shares_room(auth.uid(), owner_id))
+);
+drop policy if exists "guestbook delete" on public.guestbook;
+create policy "guestbook delete" on public.guestbook for delete using (author_id = auth.uid() or owner_id = auth.uid());
+-- 没有 update 策略：便利贴贴上就不能改
+
+alter table public.guestbook replica identity full;
+do $$ begin
+  begin alter publication supabase_realtime add table public.guestbook; exception when others then null; end;
+end $$;
+
 -- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
 -- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
 notify pgrst, 'reload schema';

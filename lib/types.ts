@@ -137,3 +137,16 @@ export interface DailyReview {
   /** last time it was saved: the desk goes dark from here until the next focus */
   updatedAt: number;
 }
+
+/** R-020 留言板: one sticky note on someone's home page */
+export interface GuestbookEntry {
+  id: string;
+  /** whose board it is on */
+  ownerId: UserId;
+  authorId: UserId;
+  /** up to 60 characters; "" = sticker only */
+  text: string;
+  /** sticker id from components/Stickers (null = text only) */
+  sticker: string | null;
+  createdAt: number;
+}
