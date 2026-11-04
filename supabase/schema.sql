@@ -285,3 +285,7 @@ alter table public.daily_reviews replica identity full;
 do $$ begin
   begin alter publication supabase_realtime add table public.daily_reviews; exception when others then null; end;
 end $$;
+
+-- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
+-- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
+notify pgrst, 'reload schema';

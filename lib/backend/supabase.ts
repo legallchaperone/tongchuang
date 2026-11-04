@@ -243,7 +243,16 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         row.status_until = iso(l.statusEmoji ? l.statusUntil ?? null : null);
         row.status_set_at = iso(l.statusEmoji ? l.statusSetAt ?? Date.now() : null);
       }
-      check(await sb.from("live_status").upsert(row));
+      const res = await sb.from("live_status").upsert(row);
+      // before the R-005 migration (or before the API reloads its schema cache) the status columns are unknown:
+      // keep the focus state in sync anyway, and only complain when the caller was actually setting a status
+      if (res.error && "status_emoji" in row && /status_(emoji|text|until|set_at)/.test(res.error.message || "")) {
+        for (const k of ["status_emoji", "status_text", "status_until", "status_set_at"]) delete row[k];
+        check(await sb.from("live_status").upsert(row));
+        if (l.statusEmoji) throw new Error("数据库还没更新：请在 Supabase 的 SQL Editor 里重新执行一遍 supabase/schema.sql");
+        return;
+      }
+      check(res);
     },
 
     async listKudos(sessionIds) {
