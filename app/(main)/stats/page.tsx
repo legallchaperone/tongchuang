@@ -6,6 +6,7 @@ import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn,
 import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
 import { ShareYearButton } from "@/components/ShareCard";
+import { DayPeek } from "@/components/DayShare";
 import { ReviewTrend } from "@/components/Wrap";
 import type { Session, UserId } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function StatsPage() {
   const [range, setRange] = useState<(typeof RANGES)[number]>(30);
   const [who, setWho] = useState<UserId>(app.me!.id);
   const [more, setMore] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null); // R-021: a day clicked in the bars or the heat map
   const p = app.profiles[who] || app.myProfile!;
   const tz = p.tz;
   const now = app.now;
@@ -120,12 +122,12 @@ export default function StatsPage() {
         <div className="cardhead"><h2>每日专注{range > 90 ? "（近 90 天）" : ""}</h2>
           <div className="legend">{subjects.filter((s) => rows.some((r) => r.parts.has(s.id))).map((s) => <span key={s.id}><i style={{ background: seriesVar(s.color) }} />{s.name}</span>)}{rows.some((r) => r.parts.has(null)) && <span><i style={{ background: "var(--ink-3)" }} />未分类</span>}</div>
         </div>
-        <div className="cardbody"><DailyBars rows={rows} subjects={subjects} goalMs={goal} height={220} todayKey={dayKey(now, tz)} /></div>
+        <div className="cardbody"><DailyBars rows={rows} subjects={subjects} goalMs={goal} height={220} todayKey={dayKey(now, tz)} onPickDay={setPicked} /></div>
       </section>
 
       <section className="card">
         <div className="cardhead"><h2>一年</h2><span className="hint">{Array.from(daily.keys()).filter((k) => k >= grid[0][0].key).length} 天有记录</span>{isMe && !app.historyLoading && <ShareYearButton />}</div>
-        <div className="cardbody"><Heatmap cols={grid} /></div>
+        <div className="cardbody"><Heatmap cols={grid} onPickDay={setPicked} /></div>
       </section>
 
       <div className="grid-2">
@@ -185,6 +187,7 @@ export default function StatsPage() {
         {historyAll.length > history.length && <div style={{ padding: "8px 20px 16px" }}><button className="btn sm ghost" onClick={() => setMore(true)}>显示更多（共 {historyAll.length} 条）</button></div>}
       </section>
       {!isMe && <p className="muted" style={{ display: "flex", alignItems: "center", gap: 8 }}><Avatar p={p} size={20} showSky={false} />正在查看 {p.name} 的数据。</p>}
+      {picked && <DayPeek userId={p.id} day={picked} onClose={() => setPicked(null)} />}
     </div>
   );
 }
