@@ -341,6 +341,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return Array.from(ids).sort((a, b) => (a === me.id ? -1 : b === me.id ? 1 : (profiles[a]?.name || "").localeCompare(profiles[b]?.name || "")));
   }, [me, rooms, profiles]);
   const idsKey = [...peopleIds].sort().join(",");
+  /** bumps after the page catches up (back from the background, the laptop woke up, the network came back): channels are rebuilt */
+  const [syncTick, setSyncTick] = useState(0);
+  // Realtime does not replay what happened while the connection was down, so a classmate who stopped
+  // focusing while this laptop slept would look like they were still focusing, for hours. Catch up instead.
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    const ids = idsKey.split(",").filter(Boolean);
+    let last = Date.now();
+    const resync = () => {
+      if (Date.now() - last < 10_000) return;
+      last = Date.now();
+      load(me, true);
+      setSyncTick((t) => t + 1);
+    };
+    let hiddenAt = document.visibilityState === "hidden" ? Date.now() : 0;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 30_000) resync();
+      hiddenAt = 0;
+    };
+    // timers stall while the computer sleeps: a long gap between ticks means events were missed
+    let tick = Date.now();
+    const wake = setInterval(() => { const gap = Date.now() - tick; tick = Date.now(); if (gap > 60_000) resync(); }, 15_000);
+    // and a light safety net while the page is open: everyone's live state every 2 minutes
+    const poll = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      backend.getLive(ids).then((lv) => setLiveMap((m) => {
+        const next = { ...m };
+        // my own entry is driven by this device's timer; the server copy may lag behind it
+        lv.forEach((l) => { if (l.userId !== me.id) next[l.userId] = l; });
+        return next;
+      })).catch(() => { /* offline: the next tick tries again */ });
+    }, 120_000);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", resync);
+    return () => { clearInterval(wake); clearInterval(poll); document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", resync); };
+  }, [status, me, idsKey, backend, load]);
   const roomKey = rooms.map((r) => r.id).join(",");
 
   // realtime
@@ -392,7 +429,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return () => { off(); offP(); offS(); };
-  }, [status, me, idsKey, roomKey, backend, pushToast, load]);
+  }, [status, me, idsKey, roomKey, backend, pushToast, load, syncTick]);
 
   /** R-019: drop a subject locally and repoint my records at `to` (null = uncategorized) */
   const redirectSubject = (from: string, to: string | null) => {
@@ -416,7 +453,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .catch(() => { /* table missing until the R-007 migration runs: the feature just stays empty */ });
     const off = backend.subscribeReviews(ids, upsert);
     return () => { alive = false; off(); };
-  }, [status, me, idsKey, backend]);
+  }, [status, me, idsKey, backend, syncTick]);
 
   // R-024 自习记录评论: load on their own, then follow live; a toast when someone comments on my record or answers me
   useEffect(() => {
@@ -443,7 +480,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       });
     });
     return () => { alive = false; off(); };
-  }, [status, me, idsKey, backend, pushToast]);
+  }, [status, me, idsKey, backend, pushToast, syncTick]);
 
   // R-025 待办: mine only, loaded once the app is ready
   useEffect(() => {
