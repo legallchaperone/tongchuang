@@ -148,9 +148,12 @@ export function FeedItem({ group }: { group: Session[] }) {
               const mine = list.some((k) => k.fromUser === meId);
               const names = Array.from(new Set(list.map((k) => app.profiles[k.fromUser]?.name || "同窗"))).join("、");
               return (
-                <button key={e} className={`kudo ${mine ? "mine" : ""} ${list.length ? "" : "add"}`} disabled={isMine} title={names || "鼓励一下"} aria-label={`${e} ${names}`} onClick={() => toggle(e)}>
-                  {e}{list.length > 0 && <span className="num">{list.length}</span>}
-                </button>
+                <span key={e} className="kudo-w">
+                  <button className={`kudo ${mine ? "mine" : ""} ${list.length ? "" : "add"} ${isMine ? "ro" : ""}`} aria-disabled={isMine || undefined} aria-label={`${e} ${names || "鼓励一下"}`} onClick={() => { if (!isMine) toggle(e); }}>
+                    {e}{list.length > 0 && <span className="num">{list.length}</span>}
+                  </button>
+                  <span className="kudo-tip" aria-hidden>{names || "鼓励一下"}</span>
+                </span>
               );
             })}
           </div>
