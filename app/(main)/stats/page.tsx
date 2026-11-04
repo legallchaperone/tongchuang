@@ -7,6 +7,7 @@ import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/
 import { Avatar, seriesVar } from "@/components/bits";
 import { ShareYearButton } from "@/components/ShareCard";
 import { DayPeek } from "@/components/DayShare";
+import { ProfileLink } from "@/components/profile/ProfileLink";
 import { ReviewTrend } from "@/components/Wrap";
 import type { Session, UserId } from "@/lib/types";
 
@@ -98,6 +99,7 @@ export default function StatsPage() {
       <div className="pagehead">
         <div><h1>数据</h1><p className="sub">按{isMe ? "你" : p.name}的当地日期统计 · {tz}{app.historyLoading && <span className="r013-loading" role="status"> · 正在加载更早的记录…</span>}</p></div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <ProfileLink id={who} className="btn sm stats-plink">{isMe ? "我的主页" : `${p.name}的主页`}</ProfileLink>
           {app.peopleIds.length > 1 && (
             <div className="seg" role="group" aria-label="查看谁的数据">
               {app.peopleIds.map((id) => <button key={id} aria-pressed={who === id} onClick={() => setWho(id)}>{id === app.me!.id ? "我" : app.profiles[id]?.name}</button>)}

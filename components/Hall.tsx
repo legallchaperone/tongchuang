@@ -12,6 +12,7 @@ import { seriesVar, StatePill } from "./bits";
 import { IHand, IUsers } from "./Icons";
 import { shownStatus } from "@/lib/status";
 import { SetStatusLink, StatusLine } from "./Status";
+import { ProfileLink } from "./profile/ProfileLink";
 
 /** one person's desk: their little room plus a name plate */
 export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolean }) {
@@ -42,10 +43,10 @@ export function DeskCard({ id, compact = false }: { id: UserId; compact?: boolea
 
   return (
     <div className="card deskcard">
-      <DeskScene p={p} live={l} present={present} maxScale={compact ? 3 : 5} closed={!!closed} />
+      <ProfileLink id={id} className="desk-link" label={`${isMe ? "我" : p.name}的主页`}><DeskScene p={p} live={l} present={present} maxScale={compact ? 3 : 5} closed={!!closed} /></ProfileLink>
       <div className="plate">
         <div className="nm">
-          <b>{p.name}{isMe ? "（你）" : ""}</b>
+          <ProfileLink id={id} className="plink-name"><b>{p.name}{isMe ? "（你）" : ""}</b></ProfileLink>
           {!isMe && present && <span className="online-dot" title="正开着同窗" />}
           <StatePill l={l} />
         </div>

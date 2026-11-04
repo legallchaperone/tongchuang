@@ -12,6 +12,7 @@ const toProfile = (r: any): Profile => ({
   dailyGoalMin: r.daily_goal_min ?? 240, pomodoroMin: r.pomodoro_min ?? 25, breakMin: r.break_min ?? 5,
   look: r.look && typeof r.look === "object" && "skin" in r.look ? r.look : null,
   focusPrefs: r.focus_prefs && typeof r.focus_prefs === "object" ? r.focus_prefs : null,
+  page: r.page && typeof r.page === "object" ? r.page : null,
 });
 const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.name, color: r.color ?? 0, archived: !!r.archived });
 const toSession = (r: any): Session => ({
@@ -117,15 +118,22 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         daily_goal_min: p.dailyGoalMin, pomodoro_min: p.pomodoroMin, break_min: p.breakMin, look: p.look,
       };
       if (p.focusPrefs) row.focus_prefs = p.focusPrefs;
-      const { error } = await sb.from("profiles").upsert(row);
+      if (p.page) row.page = p.page;
+      let { error } = await sb.from("profiles").upsert(row);
       if (!error) return;
-      // R-001/R-002: the database may not have focus_prefs yet (schema.sql not re-run); save the rest
-      if (row.focus_prefs && /focus_prefs/.test(error.message)) {
-        delete row.focus_prefs;
-        check(await sb.from("profiles").upsert(row));
-        throw new Error("其他设置已保存。专注模式的设置需要先更新数据库：在 Supabase 里重新运行 supabase/schema.sql。");
+      // R-001/R-002 focus_prefs, R-020 page: the database may not have these columns yet (schema.sql not re-run); save the rest
+      const optional: [string, string][] = [["focus_prefs", "专注模式的设置"], ["page", "个人主页"]];
+      const skipped: string[] = [];
+      for (let i = 0; i < optional.length && error; i++) {
+        const msg = error.message;
+        const hit = optional.find(([col]) => row[col] !== undefined && new RegExp(`\\b${col}\\b`).test(msg));
+        if (!hit) throw new Error(msg);
+        delete row[hit[0]];
+        skipped.push(hit[1]);
+        ({ error } = await sb.from("profiles").upsert(row));
       }
-      throw new Error(error.message);
+      if (error) throw new Error(error.message);
+      throw new Error(`其他设置已保存。${skipped.join("和")}需要先更新数据库：在 Supabase 里重新运行 supabase/schema.sql。`);
     },
 
     async listSubjects(userIds) {

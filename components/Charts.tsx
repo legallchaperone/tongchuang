@@ -16,6 +16,7 @@ function useWidth(fallback = 720) {
 import type { Profile, Subject } from "@/lib/types";
 import { dur, durShort, HOUR, hhmm, MIN, partsIn, phaseAt, startOfDay, tzCity, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { Avatar, seriesVar } from "./bits";
+import { ProfileLink } from "./profile/ProfileLink";
 
 /* ───────── stacked daily bars (by subject) with goal line ───────── */
 export function DailyBars({ rows, subjects, goalMs, height = 200, todayKey, onPickDay }: {
@@ -200,7 +201,7 @@ export function TimezoneBand({ people, viewerTz, heat, now }: { people: Profile[
         <div className="axis">{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h : ""}</span>)}</div>
         {people.map((p) => (
           <React.Fragment key={p.id}>
-            <div className="who"><Avatar p={p} size={26} showSky={false} /><div><b>{p.name}</b><small>{tzCity(p.tz)} {hhmm(now, p.tz)}</small></div></div>
+            <div className="who"><ProfileLink id={p.id} label={`${p.name}的主页`}><Avatar p={p} size={26} showSky={false} /></ProfileLink><div><ProfileLink id={p.id} className="plink-name"><b>{p.name}</b></ProfileLink><small>{tzCity(p.tz)} {hhmm(now, p.tz)}</small></div></div>
             <div style={{ position: "relative" }}>
               <div className="band">
                 {Array.from({ length: 24 }, (_, h) => {

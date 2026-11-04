@@ -11,6 +11,7 @@ import { IHand, IUsers } from "./Icons";
 import { Avatar, seriesVar, StatePill } from "./bits";
 import { activeStatus, shownStatus } from "@/lib/status";
 import { StatusFeedItem, StatusLine, useStatusPrefs } from "./Status";
+import { ProfileLink } from "./profile/ProfileLink";
 
 /** one classmate row with live status and quick actions */
 export function PersonRow({ id }: { id: UserId }) {
@@ -45,9 +46,9 @@ export function PersonRow({ id }: { id: UserId }) {
 
   return (
     <div className="person">
-      <Avatar p={p} size={40} live={l} />
+      <ProfileLink id={id} label={`${p.name}的主页`}><Avatar p={p} size={40} live={l} /></ProfileLink>
       <div style={{ minWidth: 0 }}>
-        <div className="nm"><span className="t">{p.name}{isMe ? "（你）" : ""}</span>{on && !isMe && <span className="online-dot" title="正在使用同窗" />}<StatePill l={l} /></div>
+        <div className="nm"><ProfileLink id={id} className="plink-name t">{p.name}{isMe ? "（你）" : ""}</ProfileLink>{on && !isMe && <span className="online-dot" title="正在使用同窗" />}<StatePill l={l} /></div>
         <div className="what">
           {l?.state === "focus" || l?.state === "paused" ? (
             <>{l.subjectName && <span className="subj"><span className="dot" style={{ background: seriesVar(l.subjectColor) }} />{l.subjectName}</span>} {l.task || "专注中"}</>
@@ -126,10 +127,10 @@ export function FeedItem({ group }: { group: Session[] }) {
   }
   return (
     <div className="fi">
-      <Avatar p={p} size={32} showSky={false} />
+      <ProfileLink id={p?.id} label={`${p?.name || "同窗"}的主页`}><Avatar p={p} size={32} showSky={false} /></ProfileLink>
       <div style={{ minWidth: 0 }}>
         <div className="line1">
-          <b>{isMine ? "我" : p?.name || "同窗"}</b><span className="muted">专注了</span><span className="d">{dur(total)}</span>
+          <ProfileLink id={p?.id} className="plink-name"><b>{isMine ? "我" : p?.name || "同窗"}</b></ProfileLink><span className="muted">专注了</span><span className="d">{dur(total)}</span>
           {pomos > 1 && <span className="count">· {pomos} 个番茄</span>}
           {rating != null && <span className="count">· {LEVEL[rating - 1]}</span>}
         </div>
@@ -168,10 +169,10 @@ export function ReviewFeedItem({ r }: { r: DailyReview }) {
   const viewerTz = app.myProfile?.tz || r.tz;
   return (
     <div className="fi fi-wrap">
-      <Avatar p={p} size={32} showSky={false} />
+      <ProfileLink id={p?.id} label={`${p?.name || "同窗"}的主页`}><Avatar p={p} size={32} showSky={false} /></ProfileLink>
       <div style={{ minWidth: 0 }}>
         <div className="line1">
-          <b>{isMine ? "我" : p?.name || "同窗"}</b><span className="muted">收工了 · 今天</span><span className="d">{dur(r.totalMs)}</span>
+          <ProfileLink id={p?.id} className="plink-name"><b>{isMine ? "我" : p?.name || "同窗"}</b></ProfileLink><span className="muted">收工了 · 今天</span><span className="d">{dur(r.totalMs)}</span>
           <span className="wrap-moon" aria-hidden="true" />
         </div>
         {r.note && <div className="note">明天先：{r.note}</div>}
@@ -206,7 +207,7 @@ export function Feed({ userIds, limit = 30 }: { userIds: UserId[]; limit?: numbe
     ...groups.map((g) => ({ t: g[0].startedAt, key: g[0].id, node: <FeedItem key={g[0].id} group={g} /> })),
     ...statuses.map(({ id, s }) => ({
       t: s.setAt, key: "st-" + id,
-      node: <StatusFeedItem key={"st-" + id} p={app.profiles[id]} l={app.live[id]} isMine={id === app.me?.id} avatar={<Avatar p={app.profiles[id]} size={32} showSky={false} />} />,
+      node: <StatusFeedItem key={"st-" + id} p={app.profiles[id]} l={app.live[id]} isMine={id === app.me?.id} avatar={<ProfileLink id={id} label={`${app.profiles[id]?.name || "同窗"}的主页`}><Avatar p={app.profiles[id]} size={32} showSky={false} /></ProfileLink>} />,
     })),
     ...reviews.map((r) => ({ t: r.updatedAt, key: "r" + r.userId + r.day, node: <ReviewFeedItem key={"r" + r.userId + r.day} r={r} /> })),
   ].sort((a, b) => b.t - a.t);

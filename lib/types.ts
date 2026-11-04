@@ -1,3 +1,5 @@
+import type { ProfilePage } from "./profilePage";
+
 export type UserId = string;
 
 export interface Profile {
@@ -14,6 +16,8 @@ export interface Profile {
   look: { skin: number; hair: number; hairColor: number } | null;
   /** focus-mode preferences (R-001/R-002); missing = defaults */
   focusPrefs?: FocusPrefs | null;
+  /** R-020 personal page (bio, widgets); null/missing = defaults. Read it through normalizePage() */
+  page?: ProfilePage | null;
 }
 
 /** how flow mode suggests a break: a share of the focused time, or a lookup table */
