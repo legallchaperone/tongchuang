@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { resolveSubject, useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
-import type { FocusMode } from "@/lib/types";
+import type { FocusMode, Todo } from "@/lib/types";
 import { IPlay, IPlus } from "./Icons";
 import { seriesVar } from "./bits";
 import { PxIcon } from "./Pixel";
@@ -42,7 +42,11 @@ export function MinuteStepper({ value, onChange, min = 1, max = 300, id }: { val
   );
 }
 
-export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?: { mode?: FocusMode; minutes?: number; task?: string; withUser?: string | null } }) {
+export function StartPanel({ dark = false, initial, pick }: {
+  dark?: boolean; initial?: { mode?: FocusMode; minutes?: number; task?: string; withUser?: string | null };
+  /** R-025: a to-do picked on the home page (n changes on every pick, even of the same one) */
+  pick?: { todo: Todo; n: number } | null;
+}) {
   const app = useApp();
   const focus = useFocus();
   const router = useRouter();
@@ -67,6 +71,16 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
   // 倒计时记住上次的时长
   useEffect(() => { if (!(initial?.mode === "countdown" && initial.minutes)) setCdMin(lastCountdownMin()); }, [initial?.mode, initial?.minutes]);
   const [adding, setAdding] = useState(false);
+  /** R-025: the to-do this focus will count towards, while the task still reads the same */
+  const [linked, setLinked] = useState<Todo | null>(null);
+  useEffect(() => {
+    if (!pick) return;
+    const t = pick.todo;
+    setTask(t.text); setSubjectId(t.subjectId); setMode("countdown"); setCdMin(t.estimateMin); setLinked(t);
+    const el = document.getElementById("start-task") as HTMLInputElement | null;
+    el?.focus(); el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [pick]);
+  const todoId = linked && task.trim() === linked.text ? linked.id : null;
   const [newName, setNewName] = useState("");
 
   // R-019: follow a merged / deleted subject
@@ -87,7 +101,7 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
   }
 
   function go() {
-    focus.start({ mode, minutes: mode === "countdown" ? cdMin : mode === "pomodoro" ? minutes : 0, task: task.trim(), subjectId, withUser: initial?.withUser || null });
+    focus.start({ mode, minutes: mode === "countdown" ? cdMin : mode === "pomodoro" ? minutes : 0, task: task.trim(), subjectId, withUser: initial?.withUser || null, todoId });
     router.push("/focus");
   }
 
@@ -99,6 +113,12 @@ export function StartPanel({ dark = false, initial }: { dark?: boolean; initial?
           onChange={(e) => setTask(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) go(); }} autoFocus={dark} />
         {!dark && <button className="btn primary lg" onClick={go}><IPlay /> 开始专注</button>}
       </div>
+      {todoId && (
+        <div className="start-linked">
+          <span className="muted">来自待办</span>
+          <button type="button" className="iconbtn" aria-label="不算进这条待办" title="不算进这条待办" onClick={() => setLinked(null)}>✕</button>
+        </div>
+      )}
       {recent.length > 0 && (
         <div>
           {dark && <div className="lbl">最近</div>}

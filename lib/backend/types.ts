@@ -1,4 +1,4 @@
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -97,4 +97,10 @@ export interface Backend {
   deleteComment(id: string): Promise<void>;
   /** realtime: comments added to / removed from these people's records (a delete may only carry the id) */
   subscribeComments(ownerIds: UserId[], cb: (c: SessionComment, kind: "insert" | "delete") => void): Unsub;
+
+  // R-025 待办 (only mine; nobody else can read them)
+  listTodos(): Promise<Todo[]>;
+  addTodo(t: { text: string; subjectId: string | null; estimateMin: number }): Promise<Todo>;
+  updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
+  deleteTodo(id: string): Promise<void>;
 }

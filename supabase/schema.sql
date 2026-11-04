@@ -230,6 +230,10 @@ begin
   end if;
   update sessions set subject_id = to_id where subject_id = from_id and user_id = auth.uid();
   get diagnostics n = row_count;
+  -- R-025: my to-dos follow the subject too (the table exists once the whole script has run)
+  if to_regclass('public.todos') is not null then
+    execute 'update public.todos set subject_id = $1 where subject_id = $2 and user_id = auth.uid()' using to_id, from_id;
+  end if;
   delete from subjects where id = from_id and user_id = auth.uid();
   return n;
 end $$;
@@ -366,6 +370,25 @@ alter table public.session_comments replica identity full;
 do $$ begin
   begin alter publication supabase_realtime add table public.session_comments; exception when others then null; end;
 end $$;
+
+-- ───────────── R-025 待办 ─────────────
+-- 只有自己能看能改。每条待办：一句话（≤ 80 字）、一个科目（可空）、一个预估时间（固定几档）、完成时间（空 = 没做完）。
+-- 从待办开始的专注，sessions.todo_id 记下是哪条，用来算“已用多久”；同窗能看到记录，但看不到待办本身。可重复运行。
+create table if not exists public.todos (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  text text not null check (char_length(btrim(text)) between 1 and 80),
+  subject_id uuid references public.subjects(id) on delete set null,
+  estimate_min integer not null default 25 check (estimate_min in (15, 25, 45, 60, 120)),
+  done_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists todos_user_idx on public.todos(user_id, created_at);
+alter table public.todos enable row level security;
+drop policy if exists "todos own" on public.todos;
+create policy "todos own" on public.todos for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+alter table public.sessions add column if not exists todo_id uuid references public.todos(id) on delete set null;
+create index if not exists sessions_todo_idx on public.sessions(todo_id) where todo_id is not null;
 
 -- ───────────── R-020 个人主页 ─────────────
 -- 幂等：可重复运行。签名、小组件列表和各自设置存在 profiles.page 里，结构：

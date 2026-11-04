@@ -1,8 +1,9 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
+import { checkTodo, TODO_MISSING } from "../todos";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ts = (v: any) => (v ? new Date(v).getTime() : null);
@@ -19,7 +20,7 @@ const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.n
 const toSession = (r: any): Session => ({
   id: r.id, userId: r.user_id, subjectId: r.subject_id, task: r.task || "",
   startedAt: ts(r.started_at)!, endedAt: ts(r.ended_at)!, durationMs: Number(r.duration_ms),
-  mode: r.mode, rating: r.rating, note: r.note || "", tz: r.tz || "UTC",
+  mode: r.mode, rating: r.rating, note: r.note || "", tz: r.tz || "UTC", todoId: r.todo_id || null,
 });
 const toLive = (r: any): LiveStatus => ({
   userId: r.user_id, state: r.state, task: r.task || "", subjectName: r.subject_name || "",
@@ -212,8 +213,13 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         user_id: s.userId, subject_id: s.subjectId, task: s.task, started_at: iso(s.startedAt), ended_at: iso(s.endedAt),
         duration_ms: Math.round(s.durationMs), mode: s.mode, rating: s.rating, note: s.note, tz: s.tz,
       };
+      if (s.todoId) row.todo_id = s.todoId;
       const insert = (r: any) => sb.from("sessions").insert(r).select().single();
       let res = await insert(row);
+      // R-025: before the migration there is no todo_id column, or the to-do was deleted meanwhile: keep the record without the link
+      if (res.error && row.todo_id && (/todo_id/.test(res.error.message) || (res.error.code === "23503" && /todo/.test(res.error.message)))) {
+        delete row.todo_id; res = await insert(row);
+      }
       // R-019: the subject was deleted or merged on another device meanwhile; keep the record, uncategorized
       if (res.error?.code === "23503" && s.subjectId) { row.subject_id = null; res = await insert(row); }
       // R-001: before the schema migration the mode check only knows stopwatch/pomodoro; keep the record anyway
@@ -458,6 +464,33 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         .subscribe();
       return () => { sb.removeChannel(ch); };
     },
+    // R-025 待办
+    async listTodos() {
+      const { data, error } = await sb.from("todos").select("*").eq("user_id", await myId()).order("created_at", { ascending: true });
+      if (error) throw todoError(error);
+      return (data as any[]).map(toTodo);
+    },
+    async addTodo(t) {
+      const { text, error: bad } = checkTodo(t.text);
+      if (bad) throw new Error(bad);
+      const { data, error } = await sb.from("todos")
+        .insert({ user_id: await myId(), text, subject_id: t.subjectId, estimate_min: t.estimateMin }).select().single();
+      if (error) throw todoError(error);
+      return toTodo(data);
+    },
+    async updateTodo(id, patch) {
+      const row: any = {};
+      if ("text" in patch) { const { text, error } = checkTodo(patch.text || ""); if (error) throw new Error(error); row.text = text; }
+      if ("subjectId" in patch) row.subject_id = patch.subjectId;
+      if ("estimateMin" in patch) row.estimate_min = patch.estimateMin;
+      if ("doneAt" in patch) row.done_at = iso(patch.doneAt ?? null);
+      const { error } = await sb.from("todos").update(row).eq("id", id);
+      if (error) throw todoError(error);
+    },
+    async deleteTodo(id) {
+      const { error } = await sb.from("todos").delete().eq("id", id);
+      if (error) throw todoError(error);
+    },
     subscribeGuestbookReplies(me, cb) {
       const ch = sb.channel("gbr-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `reply_to=eq.${me}` }, (p: any) => {
@@ -481,6 +514,17 @@ function commentError(e: { message: string; code?: string }): Error {
   if (e.code === "42P01" || e.code === "PGRST205" || (/session_comments/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(COMMENT_MISSING);
   if (/row-level security/i.test(m)) return new Error("只能评论同一个自习室的同窗的记录");
   if (/text_check/.test(m)) return new Error("最多 100 个字");
+  if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
+  return new Error(m);
+}
+const toTodo = (r: any): Todo => ({
+  id: r.id, userId: r.user_id, text: r.text || "", subjectId: r.subject_id || null, estimateMin: Number(r.estimate_min) || 25,
+  doneAt: ts(r.done_at), createdAt: ts(r.created_at) || 0,
+});
+function todoError(e: { message: string; code?: string }): Error {
+  const m = e.message || "";
+  if (e.code === "42P01" || e.code === "PGRST205" || (/todos/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TODO_MISSING);
+  if (e.code === "23503") return new Error("这个科目已经不在了，换一个吧");
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }

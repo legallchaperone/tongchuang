@@ -2,7 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getBackend } from "./backend";
 import type { Backend } from "./backend/types";
-import type { AuthUser, DailyReview, Kudos, SessionComment, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
+import type { AuthUser, DailyReview, Kudos, SessionComment, Todo, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
@@ -126,6 +126,12 @@ interface Ctx {
   comments: SessionComment[];
   addComment(sessionId: string, ownerId: UserId, text: string): Promise<void>;
   deleteComment(id: string): Promise<void>;
+  /** R-025: my to-dos (private); null while loading, and stays null if the table is missing */
+  todos: Todo[] | null;
+  todosError: string | null;
+  addTodo(t: { text: string; subjectId: string | null; estimateMin: number }): Promise<Todo>;
+  updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
+  deleteTodo(id: string): Promise<void>;
 }
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -171,6 +177,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { try { setSubjectRedirects(JSON.parse(localStorage.getItem(REDIRECTS) || "{}") || {}); } catch { /* */ } }, []);
   const [reviews, setReviews] = useState<DailyReview[]>([]);
   const [comments, setComments] = useState<SessionComment[]>([]);
+  const [todos, setTodos] = useState<Todo[] | null>(null);
+  const [todosError, setTodosError] = useState<string | null>(null);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
   const [historyBusy, setHistoryBusy] = useState(0);
@@ -272,7 +280,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inflightRef.current.clear();
     if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     dropSnapshots();
-    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]); setComments([]);
+    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]); setComments([]); setTodos(null); setTodosError(null);
     setStatus("signedOut");
   }, []);
 
@@ -390,6 +398,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const redirectSubject = (from: string, to: string | null) => {
     setSubjects((l) => l.filter((x) => x.id !== from));
     setSessions((l) => l.map((x) => (x.subjectId === from && x.userId === me?.id ? { ...x, subjectId: to } : x)));
+    setTodos((l) => l && l.map((t) => (t.subjectId === from ? { ...t, subjectId: to } : t)));
     setSubjectRedirects((m) => {
       const next = { ...m, [from]: to };
       try { localStorage.setItem(REDIRECTS, JSON.stringify(next)); } catch { /* */ }
@@ -435,6 +444,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     return () => { alive = false; off(); };
   }, [status, me, idsKey, backend, pushToast]);
+
+  // R-025 待办: mine only, loaded once the app is ready
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    let alive = true;
+    backend.listTodos()
+      .then((ts) => { if (alive) { setTodos(ts); setTodosError(null); } })
+      .catch((e) => { if (alive) { setTodos(null); setTodosError((e as Error).message || "待办没加载出来"); } });
+    return () => { alive = false; };
+  }, [status, me, backend]);
 
   // R-020 留言板: someone left a note on my board → a toast on whatever page I'm on
   useEffect(() => {
@@ -605,6 +624,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
     async signOut() { dropSnapshots(); await backend.signOut(); },
+    todos, todosError,
+    async addTodo(t) {
+      const saved = await backend.addTodo(t);
+      setTodos((l) => [...(l || []), saved]);
+      return saved;
+    },
+    async updateTodo(id, patch) {
+      const before = todos;
+      setTodos((l) => l && l.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      try { await backend.updateTodo(id, patch); } catch (e) { setTodos(before); throw e; }
+    },
+    async deleteTodo(id) {
+      await backend.deleteTodo(id);
+      setTodos((l) => l && l.filter((t) => t.id !== id));
+      setSessions((l) => l.map((x) => (x.todoId === id ? { ...x, todoId: null } : x)));
+    },
     comments,
     async addComment(sessionId, ownerId, text) {
       const c = await backend.addComment({ sessionId, ownerId, text });

@@ -59,6 +59,8 @@ export interface Session {
   rating: number | null;
   note: string;
   tz: string;
+  /** R-025: the to-do this focus was started from (only the owner can see the to-do itself) */
+  todoId?: string | null;
 }
 
 export type LiveState = "focus" | "break" | "paused" | "idle";
@@ -167,5 +169,18 @@ export interface SessionComment {
   ownerId: UserId;
   authorId: UserId;
   text: string;
+  createdAt: number;
+}
+
+/** R-025: a private to-do, filed under a subject, with an estimate */
+export interface Todo {
+  id: string;
+  userId: UserId;
+  text: string;
+  subjectId: string | null;
+  /** one of TODO_ESTIMATES (minutes) */
+  estimateMin: number;
+  /** null = not done yet */
+  doneAt: number | null;
   createdAt: number;
 }

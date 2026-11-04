@@ -1,8 +1,9 @@
 import type { Backend } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
 import { checkComment } from "../comments";
+import { checkTodo } from "../todos";
 import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
@@ -25,6 +26,7 @@ type DB = {
   /** R-020 留言板; added lazily to older demo data */
   guestbook?: GuestbookEntry[];
   comments?: SessionComment[];
+  todos?: Todo[];
 };
 
 function rng(seed: number) {
@@ -266,6 +268,25 @@ function seedComments(db: DB): SessionComment[] {
   return out;
 }
 
+/* ── R-025: a short to-do list ── */
+function seedTodos(db: DB): Todo[] {
+  const mine = db.subjects.filter((x) => x.userId === ME);
+  const sub = (i: number) => mine[i % Math.max(1, mine.length)]?.id ?? null;
+  const now = Date.now();
+  const t = (text: string, subjectId: string | null, estimateMin: number, hoursAgo: number, done = false): Todo =>
+    ({ id: uid(), userId: ME, text, subjectId, estimateMin, doneAt: done ? now - hoursAgo * HOUR / 2 : null, createdAt: now - hoursAgo * HOUR });
+  return [
+    t("读完 3 篇相关工作", sub(1), 120, 30),
+    t("改实验图的配色", sub(1), 45, 20),
+    t("第 4 章习题 1–20", sub(0), 60, 26),
+    t("整理错题本", sub(0), 25, 8),
+    t("精读一篇外刊", sub(2), 45, 12),
+    t("背 50 个单词", sub(2), 15, 3),
+    t("把爬虫的 bug 修掉", sub(3), 60, 40, true),
+    t("给导师发周报", null, 15, 5),
+  ];
+}
+
 export function createDemoBackend(): Backend {
   let db: DB;
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
@@ -273,6 +294,7 @@ export function createDemoBackend(): Backend {
   if (!db.reviews) db.reviews = seedReviews(db);
   if (!db.guestbook) db.guestbook = seedGuestbook();
   if (!db.comments) db.comments = seedComments(db);
+  if (!db.todos) db.todos = seedTodos(db);
   // R-020: older demo data has no pages yet
   db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
@@ -459,6 +481,7 @@ export function createDemoBackend(): Backend {
     async deleteSubject(id) {
       db.subjects = db.subjects.filter((x) => x.id !== id);
       db.sessions.forEach((s) => { if (s.subjectId === id) s.subjectId = null; });
+      db.todos?.forEach((t) => { if (t.subjectId === id) t.subjectId = null; });
       save();
     },
     async mergeSubject(fromId, toId) {
@@ -468,6 +491,7 @@ export function createDemoBackend(): Backend {
       if (!from) return 0;
       let n = 0;
       db.sessions.forEach((s) => { if (s.subjectId === fromId && s.userId === ME) { s.subjectId = toId; n++; } });
+      db.todos?.forEach((t) => { if (t.subjectId === fromId) t.subjectId = toId; });
       db.subjects = db.subjects.filter((x) => x.id !== fromId);
       save(); return n;
     },
@@ -612,6 +636,29 @@ export function createDemoBackend(): Backend {
       db.comments = db.comments!.filter((x) => x !== c); save(); emitCm(c, "delete");
     },
     subscribeComments(ownerIds, cb) { const x = { ids: new Set(ownerIds), cb }; cmSubs.add(x); return () => { cmSubs.delete(x); }; },
+    // R-025 待办
+    listTodos: async () => delay(db.todos!.map((t) => ({ ...t }))),
+    async addTodo({ text: raw, subjectId, estimateMin }) {
+      const { text, error } = checkTodo(raw);
+      if (error) throw new Error(error);
+      const t: Todo = { id: uid(), userId: ME, text, subjectId, estimateMin, doneAt: null, createdAt: Date.now() };
+      db.todos!.push(t); save();
+      return { ...t };
+    },
+    async updateTodo(id, patch) {
+      const t = db.todos!.find((x) => x.id === id);
+      if (!t) return;
+      if ("text" in patch) { const { text, error } = checkTodo(patch.text || ""); if (error) throw new Error(error); t.text = text; }
+      if ("subjectId" in patch) t.subjectId = patch.subjectId ?? null;
+      if ("estimateMin" in patch) t.estimateMin = patch.estimateMin!;
+      if ("doneAt" in patch) t.doneAt = patch.doneAt ?? null;
+      save();
+    },
+    async deleteTodo(id) {
+      db.todos = db.todos!.filter((x) => x.id !== id);
+      db.sessions.forEach((s) => { if (s.todoId === id) s.todoId = null; });
+      save();
+    },
     subscribeGuestbookReplies(_me, cb) { gbReplySubs.add(cb); return () => { gbReplySubs.delete(cb); }; },
   };
 }

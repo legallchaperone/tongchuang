@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { byDay, dailyBySubject, streaks, weekRange, withLive } from "@/lib/stats";
@@ -14,6 +14,8 @@ import { IPlay } from "@/components/Icons";
 import { StatusButton } from "@/components/Status";
 import { WrapButton, YesterdayNote } from "@/components/Wrap";
 import { ShareDayButton } from "@/components/DayShare";
+import { TodoCard } from "@/components/Todos";
+import type { Todo } from "@/lib/types";
 
 function greeting(h: number) {
   if (h < 5) return "夜深了";
@@ -55,6 +57,9 @@ export default function TodayPage() {
   const others = app.peopleIds.filter((id) => id !== meId);
   const focusingNow = others.filter((id) => app.live[id]?.state === "focus");
   const remaining = Math.max(0, goal - todayMs);
+  const [pick, setPick] = useState<{ todo: Todo; n: number } | null>(null);
+  // a pick is used once: when the focus ends the start panel comes back empty
+  useEffect(() => { if (focusing) setPick(null); }, [focusing]);
 
   return (
     <div className="page">
@@ -115,10 +120,12 @@ export default function TodayPage() {
             ) : (
               <>
                 <div className="cardhead"><h2>开始专注</h2><span className="hint">回车直接开始 · 结束后写一句复盘</span></div>
-                <div className="cardbody"><StartPanel /></div>
+                <div className="cardbody"><StartPanel pick={pick} /></div>
               </>
             )}
           </section>
+
+          <TodoCard busy={!!focusing} onPick={(todo) => setPick((p) => ({ todo, n: (p?.n || 0) + 1 }))} />
 
           <section className="card" style={{ order: 4 }}>
             <div className="cardhead"><h2>本周</h2><Link className="hint" href="/stats">完整数据 →</Link></div>

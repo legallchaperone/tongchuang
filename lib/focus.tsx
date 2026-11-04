@@ -23,6 +23,8 @@ export interface FocusState {
   focusMin?: number;
   /** pomodoro with 加时 on: time is up but the clock keeps running */
   overtime?: boolean;
+  /** R-025: started from this to-do */
+  todoId?: string | null;
 }
 
 export interface PendingReflection {
@@ -38,6 +40,8 @@ export interface PendingReflection {
   /** planned focus minutes, for "再来一轮" */
   focusMin?: number;
   pomosDone?: number;
+  /** R-025 */
+  todoId?: string | null;
 }
 
 /** what to do after the reflection (R-004) */
@@ -47,7 +51,7 @@ interface FocusCtx {
   state: FocusState | null;
   pending: PendingReflection | null;
   elapsed: number;
-  start(o: { mode: FocusMode; minutes?: number; task: string; subjectId: string | null; withUser?: UserId | null }): void;
+  start(o: { mode: FocusMode; minutes?: number; task: string; subjectId: string | null; withUser?: UserId | null; todoId?: string | null }): void;
   pause(): void;
   resume(): void;
   finish(): void;
@@ -150,6 +154,7 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
       breakMin: pomo ? breakMin : suggestBreakMin(d, prefs),
       focusMin: s.focusMin || (s.plannedMs ? Math.round(s.plannedMs / MIN) : pomo ? pomoMin : undefined),
       pomosDone: s.pomosDone + (pomo && (completed || s.overtime) ? 1 : 0),
+      todoId: s.todoId || null,
     };
   }, [breakMin, pomoMin, prefs]);
 
@@ -191,11 +196,11 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
   }, [state, elapsed]);
 
   /** a fresh focus block */
-  const focusBlock = (o: { mode: FocusMode; minutes?: number; task: string; subjectId: string | null; withUser?: UserId | null; pomosDone?: number }): FocusState => {
+  const focusBlock = (o: { mode: FocusMode; minutes?: number; task: string; subjectId: string | null; withUser?: UserId | null; pomosDone?: number; todoId?: string | null }): FocusState => {
     const now = Date.now();
     const m = o.mode === "stopwatch" ? 0 : Math.round(o.minutes || (o.mode === "pomodoro" ? pomoMin : 30));
     if (o.mode === "countdown") rememberCountdownMin(m);
-    return { phase: "focus", mode: o.mode, plannedMs: m * MIN, focusMin: m || undefined, task: o.task, subjectId: o.subjectId, startedAt: now, accumulatedMs: 0, runningSince: now, pomosDone: o.pomosDone || 0, withUser: o.withUser || null };
+    return { phase: "focus", mode: o.mode, plannedMs: m * MIN, focusMin: m || undefined, task: o.task, subjectId: o.subjectId, startedAt: now, accumulatedMs: 0, runningSince: now, pomosDone: o.pomosDone || 0, withUser: o.withUser || null, todoId: o.todoId || null };
   };
 
   function replan(min: number) {
@@ -210,8 +215,8 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
 
   const value: FocusCtx = {
     state, pending, elapsed,
-    start({ mode, minutes, task, subjectId, withUser }) {
-      setState(focusBlock({ mode: normMode(mode), minutes, task, subjectId, withUser, pomosDone: state?.pomosDone || 0 }));
+    start({ mode, minutes, task, subjectId, withUser, todoId }) {
+      setState(focusBlock({ mode: normMode(mode), minutes, task, subjectId, withUser, todoId, pomosDone: state?.pomosDone || 0 }));
     },
     pause() { if (state?.runningSince) setState({ ...state, accumulatedMs: elapsedOf(state), runningSince: null }); },
     resume() { if (state && !state.runningSince && state.phase !== "breakDone") setState({ ...state, runningSince: Date.now() }); },
@@ -231,7 +236,7 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
     },
     skipBreak() { setState((s) => s && { ...s, phase: "breakDone", runningSince: null }); },
     nextPomodoro() {
-      setState((s) => s && focusBlock({ mode: s.mode, minutes: s.focusMin || (s.mode === "pomodoro" ? pomoMin : undefined), task: s.task, subjectId: s.subjectId, withUser: s.withUser, pomosDone: s.pomosDone }));
+      setState((s) => s && focusBlock({ mode: s.mode, minutes: s.focusMin || (s.mode === "pomodoro" ? pomoMin : undefined), task: s.task, subjectId: s.subjectId, withUser: s.withUser, pomosDone: s.pomosDone, todoId: s.todoId }));
     },
     adjust(deltaMin) {
       if (!state || state.phase !== "focus" || state.mode === "stopwatch") return;
@@ -249,17 +254,18 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
       if (then === "break") {
         // a finished pomodoro is already on its break; anything else starts one now
         if (state?.phase !== "break") {
-          setState({ phase: "break", mode: p.mode, plannedMs: (p.mode === "pomodoro" ? p.breakMin || breakMin : suggestBreakMin(d, prefs)) * MIN, focusMin: p.focusMin, task, subjectId, startedAt: now, accumulatedMs: 0, runningSince: now, pomosDone: p.pomosDone || 0, withUser: null });
+          setState({ phase: "break", mode: p.mode, plannedMs: (p.mode === "pomodoro" ? p.breakMin || breakMin : suggestBreakMin(d, prefs)) * MIN, focusMin: p.focusMin, task, subjectId, startedAt: now, accumulatedMs: 0, runningSince: now, pomosDone: p.pomosDone || 0, withUser: null, todoId: p.todoId || null });
         }
       } else if (then === "again") {
-        setState(focusBlock({ mode: p.mode, minutes: p.focusMin, task, subjectId, pomosDone: p.pomosDone }));
+        setState(focusBlock({ mode: p.mode, minutes: p.focusMin, task, subjectId, pomosDone: p.pomosDone, todoId: p.todoId }));
       } else if (then === "switch") {
         setState(null);
       }
-      await app.addSession({ userId: app.me.id, subjectId, task, startedAt: p.startedAt, endedAt: p.endedAt - (p.durationMs - d), durationMs: d, mode: p.mode, rating, note, tz: prof?.tz || browserTz() });
+      await app.addSession({ userId: app.me.id, subjectId, task, startedAt: p.startedAt, endedAt: p.endedAt - (p.durationMs - d), durationMs: d, mode: p.mode, rating, note, tz: prof?.tz || browserTz(), todoId: p.todoId || null });
     },
     dropReflection() { setPending(null); },
-    setTask(task, subjectId) { setState((s) => s && { ...s, task, subjectId }); },
+    // a different task is no longer the to-do it was started from
+    setTask(task, subjectId) { setState((s) => s && { ...s, task, subjectId, todoId: task === s.task ? s.todoId : null }); },
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
