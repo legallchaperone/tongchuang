@@ -351,7 +351,7 @@ input[type="range"] { accent-color: var(--btn); width: 100%; }
 
 /* ───── toasts ───── */
 .toasts { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(16px + env(safe-area-inset-top, 0px)); z-index: 80; display: flex; flex-direction: column; gap: 8px; width: min(360px, calc(100vw - 32px)); }
-.toast { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 4px; animation: pop .25s steps(3); }
+.toast { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; animation: pop .25s steps(3); }
 .toast b { display: block; font-weight: 400; }
 .toast p { color: var(--ink-2); overflow-wrap: anywhere; }
 .toast .btn { margin-top: 6px; }

@@ -16,7 +16,7 @@ export function Toasts() {
   return (
     <div className="toasts" aria-live="polite">
       {toasts.map((t) => (
-        <div className="toast" key={t.id}>
+        <div className="toast card" key={t.id}>
           <span className="dot" style={{ background: t.color != null ? seriesVar(t.color) : "var(--lamp)", marginTop: 7 }} />
           <div>
             <b>{t.title}</b>
