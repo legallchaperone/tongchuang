@@ -4,6 +4,7 @@
  * Only things fit for people outside the room: no guestbook; task names and tomorrow's plan can be hidden.
  */
 import type { ProfilePage, Widget } from "./profilePage";
+import { CAKE_N, drawCake } from "./cake";
 import { countdownLabel, daysUntil, WIDGET_INFO } from "./profilePage";
 import { peakLabel, peakWindow, type ProfileStats, type SubjectPart } from "./profileStats";
 import { medalGrid, MEDAL_H, MEDAL_W } from "./badges";
@@ -169,8 +170,8 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
       const top = parts.slice(0, wide ? 5 : 4);
       const restMs = total - top.reduce((a, q) => a + q.ms, 0);
       const items = restMs > 0 ? [...top, { key: "__o", name: "其他", color: null, ms: restMs }] : top;
-      const cell = wide ? 3 : 2, N = 28, size = N * cell;
-      donut(r, x, y, cell, items.map((q) => ({ ms: q.ms, color: q.key === "__o" ? p.ink3 : subjColor(r, q) })));
+      const cell = wide ? 3 : 2, size = CAKE_N * cell;
+      drawCake(ctx, x, y, cell, items.map((q) => ({ ms: q.ms, color: q.key === "__o" ? p.ink3 : subjColor(r, q) })), p.ink3);
       const lx = x + size + 8, lw = cw - size - 8;
       items.forEach((q, i) => {
         const ly = y + i * 14;
@@ -278,23 +279,6 @@ function widgetBody(r: Run, w: Widget, x: number, y: number, cw: number, wide: b
       lines.forEach((ln, i) => T(r, ln, x, y + i * 14, p.ink));
       return Math.max(14, lines.length * 14);
     }
-  }
-}
-
-/** the same pixel ring as the PixelDonut on the page, `cell` px per grid cell */
-function donut(r: Run, x: number, y: number, cell: number, items: { ms: number; color: string }[]) {
-  const N = 28, total = items.reduce((a, q) => a + q.ms, 0) || 1;
-  let acc = 0;
-  const bounds = items.map((q) => { const a0 = acc; acc += q.ms / total; return { a0, a1: acc, color: q.color }; });
-  const c = (N - 1) / 2, rOut = N / 2 - 0.4, rIn = N / 2 - 7.2;
-  for (let gy = 0; gy < N; gy++) for (let gx = 0; gx < N; gx++) {
-    const dx = gx - c, dy = gy - c, rr = Math.hypot(dx, dy);
-    if (rr > rOut || rr < rIn) continue;
-    const a = ((Math.atan2(dx, -dy) / (2 * Math.PI)) + 1) % 1;
-    const b = bounds.find((s) => a >= s.a0 && a < s.a1) || bounds[bounds.length - 1];
-    if (!b) continue;
-    if (bounds.length > 1 && Math.min(a - b.a0, b.a1 - a) * 2 * Math.PI * rr < 0.55) continue;
-    rect(r.ctx, x + gx * cell, y + gy * cell, cell, cell, b.color);
   }
 }
 

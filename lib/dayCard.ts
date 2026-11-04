@@ -5,6 +5,7 @@
  * Drawn at 360 px native width with lib/shareKit (hard-edged text, frames, footer with QR), exported ×3.
  */
 import type { DailyReview, FocusMode, Session, Subject } from "./types";
+import { CAKE_N, drawCake } from "./cake";
 import { dayShares, touching } from "./stats";
 import { addDaysKey, dur, durShort, partsIn, phaseAt, tzCity, weekdayCn, weekdayOfKey, zonedToUtc } from "./time";
 import { drawScene, SCENE_H, SCENE_W, shade, type AvatarLook } from "./pixel";
@@ -143,23 +144,6 @@ function face(ctx: CanvasRenderingContext2D, v: number, x: number, y: number, s:
   } });
   FACE_MARKS[v]?.forEach(([fx, fy]) => rect(ctx, x + fx * s, y + fy * s, s, s, "#3a2016"));
   if (v === 3) { rect(ctx, x + s, y + 5 * s, s, s, "#f08a8a"); rect(ctx, x + 8 * s, y + 5 * s, s, s, "#f08a8a"); }
-}
-
-/** pixel donut like components/Charts.tsx PixelDonut: n cells per side, `cell` px each, clockwise from 12 o'clock */
-function donut(ctx: CanvasRenderingContext2D, x: number, y: number, n: number, cell: number, items: { ms: number; color: string }[], empty: string) {
-  const total = items.reduce((a, s) => a + s.ms, 0);
-  let acc = 0;
-  const bounds = items.map((s) => { const a0 = acc; acc += total ? s.ms / total : 0; return { a0, a1: acc, color: s.color }; });
-  const c = (n - 1) / 2, rOut = n / 2 - 0.4, rIn = n / 2 - 7.6;
-  for (let gy = 0; gy < n; gy++) for (let gx = 0; gx < n; gx++) {
-    const dx = gx - c, dy = gy - c, r = Math.hypot(dx, dy);
-    if (r > rOut || r < rIn) continue;
-    const a = ((Math.atan2(dx, -dy) / (2 * Math.PI)) + 1) % 1;
-    const b = bounds.find((s) => a >= s.a0 && a < s.a1) || bounds[bounds.length - 1];
-    if (!b) { rect(ctx, x + gx * cell, y + gy * cell, cell, cell, empty); continue; }
-    if (bounds.length > 1 && Math.min(a - b.a0, b.a1 - a) * 2 * Math.PI * r < 0.55) continue;
-    rect(ctx, x + gx * cell, y + gy * cell, cell, cell, b.color);
-  }
 }
 
 /** split text into at most `max` lines that fit width w */
@@ -351,9 +335,9 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, d: DayData, theme: Ca
   /* subjects */
   if (L.subj) {
     const y0 = L.subj.y;
-    const n = 32, cell = 2, size = n * cell;
+    const n = 32, cell = 2, size = n * cell, inset = ((n - CAKE_N) * cell) / 2;
     const dy = y0;
-    donut(ctx, X + 6, dy, n, cell, d.slices.map((s) => ({ ms: s.ms, color: sc(s.color) })), p.slot);
+    drawCake(ctx, X + 6 + inset, dy + inset, cell, d.slices.map((s) => ({ ms: s.ms, color: sc(s.color) })), p.slot);
     const tot = d.slices.reduce((a, s) => a + s.ms, 0) || 1;
     const lx = X + 6 + size + 18, rw = X + CW - lx;
     const rows = d.slices.length;

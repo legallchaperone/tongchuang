@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CAKE_COLORS, CAKE_N, cakeRuns } from "@/lib/cake";
 
 /** chart drawing width = container width, so text stays at its real size */
 function useWidth(fallback = 720) {
@@ -240,7 +241,7 @@ function OverlapText({ spans }: { spans: [number, number][] }) {
   ), [spans, total]);
 }
 
-/* ───────── pixel donut: part-to-whole, values printed in the legend ───────── */
+/* ───────── subject cake: part-to-whole, values printed in the legend ───────── */
 export interface Slice { key: string; label: React.ReactNode; name: string; ms: number; color: string }
 
 /** keep the 5 largest parts and fold the rest into "其他" so the ring never has more than 6 segments */
@@ -254,44 +255,24 @@ export function foldSlices(items: Slice[], max = 6): Slice[] {
 
 export function PixelDonut({ items, size = 200 }: { items: Slice[]; size?: number }) {
   const [hover, setHover] = useState<string | null>(null);
-  const N = 28; // grid cells per side
   const total = items.reduce((a, s) => a + s.ms, 0) || 1;
-  // cumulative angle boundaries, clockwise from 12 o'clock
-  const bounds = useMemo(() => {
-    let acc = 0;
-    return items.map((s) => { const a0 = acc; acc += s.ms / total; return { key: s.key, a0, a1: acc, color: s.color }; });
-  }, [items, total]);
-  const cells = useMemo(() => {
-    const out: { x: number; y: number; key: string; color: string }[] = [];
-    const c = (N - 1) / 2, rOut = N / 2 - 0.4, rIn = N / 2 - 7.2;
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const dx = x - c, dy = y - c, r = Math.hypot(dx, dy);
-      if (r > rOut || r < rIn) continue;
-      const a = ((Math.atan2(dx, -dy) / (2 * Math.PI)) + 1) % 1;
-      const b = bounds.find((s) => a >= s.a0 && a < s.a1) || bounds[bounds.length - 1];
-      if (!b) continue;
-      // one cell of gap at each boundary (when there is more than one slice)
-      const edge = bounds.length > 1 && Math.min(a - b.a0, b.a1 - a) * 2 * Math.PI * r < 0.55;
-      if (edge) continue;
-      out.push({ x, y, key: b.key, color: b.color });
-    }
-    return out;
-  }, [bounds]);
-  const hv = items.find((s) => s.key === hover);
+  const runs = useMemo(() => cakeRuns(items.map((s) => s.ms)), [items]);
+  const hi = hover ? items.findIndex((s) => s.key === hover) : -1;
   return (
     <div className="donut">
-      <div className="donut-ring" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
-        <svg viewBox={`0 0 ${N} ${N}`} width={size} height={size} shapeRendering="crispEdges" role="img"
+      <div className="donut-ring cake" style={{ width: size, height: size }} onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${CAKE_N} ${CAKE_N}`} width={size} height={size} shapeRendering="crispEdges" role="img"
           aria-label={items.map((s) => `${s.name} ${Math.round((s.ms / total) * 100)}%`).join("，")}>
-          {cells.map((c) => (
-            <rect key={`${c.x}-${c.y}`} x={c.x} y={c.y} width={1} height={1} fill={c.color}
-              opacity={hover && hover !== c.key ? 0.35 : 1} onMouseEnter={() => setHover(c.key)} />
-          ))}
+          {runs.map((r) => {
+            const sliced = r.tone === "top";
+            return (
+              <rect key={`${r.x}-${r.y}`} x={r.x} y={r.y} width={r.w} height={1}
+                fill={sliced ? items[r.slice]?.color || "var(--ink-3)" : CAKE_COLORS[r.tone as Exclude<typeof r.tone, "top">]}
+                opacity={hi >= 0 && sliced && r.slice !== hi ? 0.35 : 1}
+                onMouseEnter={sliced ? () => setHover(items[r.slice]?.key ?? null) : undefined} />
+            );
+          })}
         </svg>
-        <div className="donut-center">
-          {hv ? <><b className="num">{Math.round((hv.ms / total) * 100)}%</b><span>{hv.name}</span></>
-            : <><b className="num">{durShort(total)}</b><span>合计</span></>}
-        </div>
       </div>
       <ul className="donut-legend">
         {items.map((s) => (
