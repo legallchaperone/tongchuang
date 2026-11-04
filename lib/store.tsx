@@ -2,7 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getBackend } from "./backend";
 import type { Backend } from "./backend/types";
-import type { AuthUser, DailyReview, Kudos, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
+import type { AuthUser, DailyReview, Kudos, SessionComment, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
@@ -122,6 +122,10 @@ interface Ctx {
   /** R-007 收工: everyone's daily reviews (about a year) */
   reviews: DailyReview[];
   saveReview(r: Omit<DailyReview, "userId" | "createdAt" | "updatedAt">): Promise<DailyReview>;
+  /** R-024: comments on everyone's records from the last few weeks, oldest first */
+  comments: SessionComment[];
+  addComment(sessionId: string, ownerId: UserId, text: string): Promise<void>;
+  deleteComment(id: string): Promise<void>;
 }
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -166,6 +170,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [subjectRedirects, setSubjectRedirects] = useState<Record<string, string | null>>({});
   useEffect(() => { try { setSubjectRedirects(JSON.parse(localStorage.getItem(REDIRECTS) || "{}") || {}); } catch { /* */ } }, []);
   const [reviews, setReviews] = useState<DailyReview[]>([]);
+  const [comments, setComments] = useState<SessionComment[]>([]);
+  const commentsRef = useRef(comments);
+  commentsRef.current = comments;
   const [historyBusy, setHistoryBusy] = useState(0);
   const now = useNow(1000);
   const cacheOn = backend.mode === "supabase"; // the demo already lives in this browser
@@ -265,7 +272,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inflightRef.current.clear();
     if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     dropSnapshots();
-    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]);
+    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]); setComments([]);
     setStatus("signedOut");
   }, []);
 
@@ -401,6 +408,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const off = backend.subscribeReviews(ids, upsert);
     return () => { alive = false; off(); };
   }, [status, me, idsKey, backend]);
+
+  // R-024 自习记录评论: load on their own, then follow live; a toast when someone comments on my record or answers me
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    const ids = idsKey.split(",").filter(Boolean);
+    let alive = true;
+    const add = (c: SessionComment) => setComments((l) => (l.some((x) => x.id === c.id) ? l : [...l, c].sort((a, b) => a.createdAt - b.createdAt)));
+    backend.listComments(ids, Date.now() - 40 * 86400_000)
+      .then((cs) => { if (alive) setComments((l) => { const seen = new Set(cs.map((c) => c.id)); return [...cs, ...l.filter((x) => !seen.has(x.id))].sort((a, b) => a.createdAt - b.createdAt); }); })
+      .catch(() => { /* table missing until the R-024 migration runs: no comments yet */ });
+    const off = backend.subscribeComments(ids, (c, kind) => {
+      if (kind === "delete") { setComments((l) => l.filter((x) => x.id !== c.id)); return; }
+      if (commentsRef.current.some((x) => x.id === c.id)) return;
+      // someone else's record: only when its owner answers a thread I am in
+      const answered = commentsRef.current.some((x) => x.sessionId === c.sessionId && x.authorId === me.id);
+      add(c);
+      if (c.authorId === me.id) return;
+      const mine = c.ownerId === me.id;
+      if (!mine && !(answered && c.authorId === c.ownerId)) return;
+      const p = profilesRef.current[c.authorId];
+      pushToast({
+        title: mine ? `${p?.name || "同窗"} 评论了你的记录` : `${p?.name || "同窗"} 回复了你`, body: c.text, color: p?.color, ttl: 12000,
+        action: typeof location !== "undefined" && location.pathname === "/" ? undefined : { label: "去看看", href: "/" },
+      });
+    });
+    return () => { alive = false; off(); };
+  }, [status, me, idsKey, backend, pushToast]);
 
   // R-020 留言板: someone left a note on my board → a toast on whatever page I'm on
   useEffect(() => {
@@ -571,6 +605,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
     async signOut() { dropSnapshots(); await backend.signOut(); },
+    comments,
+    async addComment(sessionId, ownerId, text) {
+      const c = await backend.addComment({ sessionId, ownerId, text });
+      setComments((l) => (l.some((x) => x.id === c.id) ? l : [...l, c]));
+    },
+    async deleteComment(id) {
+      await backend.deleteComment(id);
+      setComments((l) => l.filter((x) => x.id !== id));
+    },
     reviews,
     async saveReview(r) {
       if (!me) throw new Error("还没登录");

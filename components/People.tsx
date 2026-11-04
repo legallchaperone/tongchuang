@@ -5,9 +5,10 @@ import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { liveFocusMs, todayMs as todayFocus } from "@/lib/stats";
 import { livePrefix } from "@/lib/focusModes";
-import type { DailyReview, Session, UserId } from "@/lib/types";
+import type { DailyReview, Session, SessionComment, UserId } from "@/lib/types";
+import { checkComment, COMMENT_MAX } from "@/lib/comments";
 import { ago, clock, dayKey, dur, hhmm, partsIn, phaseAt, phaseLabel, tzCity, tzDiffLabel } from "@/lib/time";
-import { IHand, IUsers } from "./Icons";
+import { IHand, ITrash, IUsers } from "./Icons";
 import { Avatar, seriesVar, StatePill } from "./bits";
 import { activeStatus, shownStatus } from "@/lib/status";
 import { StatusFeedItem, StatusLine, useStatusPrefs } from "./Status";
@@ -121,6 +122,7 @@ export function FeedItem({ group }: { group: Session[] }) {
   const notes = group.map((x) => x.note).filter(Boolean).reverse();
   const pomos = group.filter((x) => x.mode === "pomodoro").length;
   const groups = EMOJIS.map((e) => ({ e, list: ks.filter((k) => k.emoji === e) })).filter((g) => g.list.length || !isMine);
+  const [writing, setWriting] = useState(false);
   async function toggle(e: string) {
     const mineK = ks.find((k) => k.emoji === e && k.fromUser === meId);
     try { await app.toggleKudos(mineK ? mineK.sessionId : s.id, e); } catch (err) { app.pushToast({ title: "操作失败", body: (err as Error).message }); }
@@ -142,7 +144,7 @@ export function FeedItem({ group }: { group: Session[] }) {
         <div className="meta">
           <span className="num">{hhmm(first.startedAt, viewerTz)}–{hhmm(s.endedAt, viewerTz)}</span>
           {s.tz !== viewerTz && <span>{p?.name || "对方"}当地 <span className="num">{hhmm(first.startedAt, s.tz)}–{hhmm(s.endedAt, s.tz)}</span></span>}
-        {groups.length > 0 && (
+        {(
           <div className="kudos" style={{ marginLeft: "auto", marginTop: 0 }}>
             {groups.map(({ e, list }) => {
               const mine = list.some((k) => k.fromUser === meId);
@@ -156,11 +158,79 @@ export function FeedItem({ group }: { group: Session[] }) {
                 </span>
               );
             })}
+            <span className="kudo-w">
+              <button className={`kudo add${writing ? " mine" : ""}`} aria-expanded={writing} aria-label="评论" onClick={() => setWriting((v) => !v)}>💬</button>
+              <span className="kudo-tip" aria-hidden>评论</span>
+            </span>
           </div>
         )}
         </div>
+        <Comments ids={ids} sessionId={s.id} ownerId={s.userId} writing={writing} onClose={() => setWriting(false)} />
       </div>
     </div>
+  );
+}
+
+/** R-024: comments under a record (or a run of merged records), oldest first, plus a one-line box */
+const CM_FOLD = 3;
+function Comments({ ids, sessionId, ownerId, writing, onClose }: { ids: Set<string>; sessionId: string; ownerId: UserId; writing: boolean; onClose: () => void }) {
+  const app = useApp();
+  const me = app.me?.id;
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const list = app.comments.filter((c) => ids.has(c.sessionId));
+  if (!list.length && !writing) return null;
+  const hidden = open ? 0 : Math.max(0, list.length - CM_FOLD);
+  const shown = hidden ? list.slice(-CM_FOLD) : list;
+  const name = (id: UserId) => (id === me ? "我" : app.profiles[id]?.name || "同窗");
+  async function remove(c: SessionComment) {
+    try { await app.deleteComment(c.id); } catch (e) { app.pushToast({ title: "没删掉", body: (e as Error).message }); }
+    setConfirm(null);
+  }
+  return (
+    <div className="cms">
+      {hidden > 0 && <button type="button" className="cm-more" onClick={() => setOpen(true)}>还有 <span className="num">{hidden}</span> 条评论</button>}
+      {shown.map((c) => (
+        <div key={c.id} className="cm">
+          <p><ProfileLink id={c.authorId} className="plink-name"><b>{name(c.authorId)}</b></ProfileLink>：{c.text}</p>
+          <span className="cm-meta">
+            <time className="num" dateTime={new Date(c.createdAt).toISOString()} title={new Date(c.createdAt).toLocaleString()}>{ago(c.createdAt, app.now)}</time>
+            {(c.authorId === me || ownerId === me) && (confirm === c.id
+              ? <><button type="button" className="cm-act danger" onClick={() => remove(c)}>删掉</button><button type="button" className="cm-act" onClick={() => setConfirm(null)}>留着</button></>
+              : <button type="button" className="iconbtn cm-del" aria-label="删掉这条评论" title="删掉" onClick={() => setConfirm(c.id)}><ITrash /></button>)}
+          </span>
+        </div>
+      ))}
+      {writing && <CommentBox sessionId={sessionId} ownerId={ownerId} onClose={onClose} />}
+    </div>
+  );
+}
+
+function CommentBox({ sessionId, ownerId, onClose }: { sessionId: string; ownerId: UserId; onClose: () => void }) {
+  const app = useApp();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const len = Array.from(text.trim()).length;
+  const isMine = ownerId === app.me?.id;
+  async function send(ev: React.FormEvent) {
+    ev.preventDefault();
+    const { text: t, error } = checkComment(text);
+    if (error) { setErr(error); return; }
+    setBusy(true); setErr(null);
+    try { await app.addComment(sessionId, ownerId, t); setText(""); onClose(); }
+    catch (e) { setErr((e as Error).message || "没发出去，稍后再试"); }
+    finally { setBusy(false); }
+  }
+  return (
+    <form className="cm-box" onSubmit={send} onKeyDown={(e) => { if (e.key === "Escape" && !busy) onClose(); }}>
+      <input className="input" autoFocus value={text} maxLength={COMMENT_MAX * 2} disabled={busy}
+        onChange={(e) => { setText(e.target.value); if (err) setErr(null); }}
+        placeholder={isMine ? "回一句…" : `对 ${app.profiles[ownerId]?.name || "TA"} 说点什么…`} aria-label="评论内容" />
+      <button type="submit" className="btn sm primary" disabled={busy || !len || len > COMMENT_MAX}>{busy ? "…" : "发送"}</button>
+      <button type="button" className="btn sm ghost" onClick={onClose} disabled={busy}>取消</button>
+      {(err || len > COMMENT_MAX) && <span className="cm-err" role="alert">{err || `最多 ${COMMENT_MAX} 个字`}</span>}
+    </form>
   );
 }
 

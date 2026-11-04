@@ -158,3 +158,14 @@ export interface GuestbookEntry {
   /** R-023: who the reply answers (gets notified) */
   replyTo?: UserId | null;
 }
+
+/** R-024: a short comment under someone's study record */
+export interface SessionComment {
+  id: string;
+  sessionId: string;
+  /** whose record it is */
+  ownerId: UserId;
+  authorId: UserId;
+  text: string;
+  createdAt: number;
+}

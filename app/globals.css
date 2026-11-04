@@ -273,6 +273,22 @@ input[type="range"] { accent-color: var(--btn); width: 100%; }
 .kudo.mine { background: var(--lamp-soft); box-shadow: inset 0 -3px 0 var(--lamp); }
 .kudo:hover { filter: brightness(1.05); }
 .kudo.ro { cursor: default; }
+/* R-024 评论 */
+.cms { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 6px 10px; background: var(--panel); box-shadow: 0 0 0 2px var(--slot); }
+.cm { display: flex; gap: 8px; align-items: baseline; font-size: 13px; line-height: 18px; }
+.cm p { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.cm b { font-weight: 400; }
+.cm-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--ink-3); font-size: 12px; }
+.cm-del { width: 20px; height: 20px; margin: -3px 0; }
+.cm-act { background: none; border: 0; padding: 0 2px; font: inherit; color: var(--ink-2); cursor: pointer; }
+.cm-act:hover { text-decoration: underline; }
+.cm-act.danger { color: var(--bad); }
+.cm-more { align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.cm-more:hover { color: var(--ink); text-decoration: underline; }
+.cm-box { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.cm-box .input { flex: 1 1 160px; min-width: 0; height: 30px; font-size: 13px; }
+.cm-err { flex-basis: 100%; color: var(--bad); font-size: 12px; }
+@media (hover: hover) { .cm .cm-del { opacity: 0; } .cm:hover .cm-del, .cm .cm-del:focus-visible { opacity: .8; } }
 .kudo-w { position: relative; display: inline-flex; }
 .kudo-tip { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 6; pointer-events: none; background: var(--edge); color: var(--on-wood); padding: 4px 8px; font-size: 12px; line-height: 1.4; white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 0 0 2px var(--wood-hi); opacity: 0; transform: translateY(2px); transition: opacity .12s, transform .12s; }
 .kudo-w:hover .kudo-tip, .kudo-w:focus-within .kudo-tip { opacity: 1; transform: none; }
@@ -1120,3 +1136,4 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .pshare-preview img { max-height: min(58vh, 720px); }
 /* ---- /R-020 个人主页 ---- */
 .gb-reply-box .muted { color: var(--gb-ink-2); }
+.rec-filter { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 20px 10px; }

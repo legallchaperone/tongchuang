@@ -27,6 +27,9 @@ export default function StatsPage() {
   const [range, setRange] = useState<(typeof RANGES)[number]>(30);
   const [who, setWho] = useState<UserId>(app.me!.id);
   const [more, setMore] = useState(false);
+  /** 记录明细 filter: "all", "none" (no subject) or a subject id */
+  const [subjF, setSubjF] = useState("all");
+  useEffect(() => { setSubjF("all"); }, [who]);
   const [picked, setPicked] = useState<string | null>(null); // R-021: a day clicked in the bars or the heat map
   const p = app.profiles[who] || app.myProfile!;
   const tz = p.tz;
@@ -91,7 +94,14 @@ export default function StatsPage() {
     return { key: id, label: <><span className="dot" style={{ background: seriesVar(pp.color) }} />{pp.name}</>, ms, color: seriesVar(pp.color) };
   }).filter(Boolean).sort((a, b) => b!.ms - a!.ms) as { key: string; label: React.ReactNode; ms: number; color: string }[], [app.peopleIds, app.profiles, app.sessions, app.live, range, minute]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const historyAll = inRange.filter((s) => s.id !== "live");
+  const recorded = inRange.filter((s) => s.id !== "live");
+  // subjects that appear in this window, most used first, for the filter chips
+  const subjChips = (() => {
+    const ms = new Map<string, number>();
+    recorded.forEach((s) => { const k = s.subjectId || "none"; ms.set(k, (ms.get(k) || 0) + s.durationMs); });
+    return Array.from(ms).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  })();
+  const historyAll = subjF === "all" ? recorded : recorded.filter((s) => (s.subjectId || "none") === subjF);
   const history = historyAll.slice(0, more ? 200 : 15);
 
   return (
@@ -162,7 +172,20 @@ export default function StatsPage() {
       </div>
 
       <section className="card">
-        <div className="cardhead" style={{ paddingBottom: 8 }}><h2>记录明细</h2><span className="hint">{isMe ? "忘了点结束？点“修改”把时长改短（只能改短）" : `共 ${historyAll.length} 条`}</span></div>
+        <div className="cardhead" style={{ paddingBottom: 8 }}><h2>记录明细</h2><span className="hint">{isMe ? "点“修改”可以换科目，或把时长改短" : `共 ${historyAll.length} 条`}</span></div>
+        {subjChips.length > 1 && (
+          <div className="rec-filter" role="group" aria-label="按科目筛选">
+            {["all", ...subjChips].map((k) => {
+              const sub = subjects.find((x) => x.id === k);
+              return (
+                <button key={k} className={`chip${subjF === k ? " on" : ""}`} aria-pressed={subjF === k} onClick={() => { setSubjF(k); setMore(false); }}>
+                  {sub && <span className="dot" style={{ background: seriesVar(sub.color) }} />}
+                  {k === "all" ? "全部" : k === "none" ? "未分类" : sub?.name || "已删除的科目"}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 560 }}>
             <thead><tr style={{ textAlign: "left", color: "var(--ink-3)", fontSize: 12 }}>
@@ -178,11 +201,11 @@ export default function StatsPage() {
                     <td style={{ maxWidth: 320 }}>{sub && <span className="subj" style={{ marginRight: 6 }}><span className="dot" style={{ background: seriesVar(sub.color) }} />{sub.name}</span>}{s.task || "自习"}{s.note && <div className="muted" style={{ fontSize: 12 }}>{s.note}</div>}</td>
                     <td className="num" style={{ textAlign: "right" }}>{dur(s.durationMs)}</td>
                     <td className="num" style={{ textAlign: "right", paddingRight: 20 }}>{s.rating ?? "—"}</td>
-                    {isMe && <td style={{ textAlign: "right", paddingRight: 12 }}><EditDuration s={s} /></td>}
+                    {isMe && <td style={{ textAlign: "right", paddingRight: 12 }}><EditRecord s={s} /></td>}
                   </tr>
                 );
               })}
-              {!history.length && <tr><td colSpan={6} className="empty">这段时间没有记录</td></tr>}
+              {!history.length && <tr><td colSpan={6} className="empty">{subjF === "all" ? "这段时间没有记录" : "这个科目这段时间没有记录"}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -194,27 +217,41 @@ export default function StatsPage() {
   );
 }
 
-/** shorten a saved record (e.g. the timer kept running after you left); it can never be made longer */
-function EditDuration({ s }: { s: Session }) {
+/** change a saved record's subject, or shorten it (e.g. the timer kept running after you left); it can never be made longer */
+function EditRecord({ s }: { s: Session }) {
   const app = useApp();
   const max = Math.floor(s.durationMs / 60_000);
   const [open, setOpen] = useState(false);
   const [min, setMin] = useState(max);
+  const [subj, setSubj] = useState(s.subjectId || "");
   const [busy, setBusy] = useState(false);
-  if (!open) return <button className="btn sm ghost" onClick={() => { setMin(max); setOpen(true); }} aria-label="修改这条记录的时长">修改</button>;
+  const mine = app.subjects.filter((x) => x.userId === app.me?.id && (!x.archived || x.id === s.subjectId));
+  if (!open) return <button className="btn sm ghost" onClick={() => { setMin(max); setSubj(s.subjectId || ""); setOpen(true); }} aria-label="修改这条记录">修改</button>;
   const valid = min >= 1 && min <= max;
+  const changed = min !== max || subj !== (s.subjectId || "");
   async function save() {
     setBusy(true);
-    try { await app.updateSession(s.id, { durationMs: min * 60_000 }); setOpen(false); app.pushToast({ title: "时长已改为 " + dur(min * 60_000) }); }
-    catch (e) { app.pushToast({ title: "没改成", body: (e as Error).message }); }
+    try {
+      const patch: Parameters<typeof app.updateSession>[1] = {};
+      if (min !== max) patch.durationMs = min * 60_000;
+      if (subj !== (s.subjectId || "")) patch.subjectId = subj || null;
+      await app.updateSession(s.id, patch);
+      setOpen(false);
+      app.pushToast({ title: "已保存" });
+    } catch (e) { app.pushToast({ title: "没改成", body: (e as Error).message }); }
     finally { setBusy(false); }
   }
   return (
-    <span style={{ display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}>
-      <input className="input num" type="number" min={1} max={max} value={min} aria-label={`新的时长（分钟，最多 ${max}）`}
-        style={{ width: 72, height: 28 }} onChange={(e) => setMin(Math.floor(+e.target.value || 0))} onKeyDown={(e) => { if (e.key === "Enter" && valid) save(); if (e.key === "Escape") setOpen(false); }} autoFocus />
+    <span style={{ display: "inline-flex", gap: 4, alignItems: "center", whiteSpace: "nowrap" }}
+      onKeyDown={(e) => { if (e.key === "Enter" && valid && changed) save(); if (e.key === "Escape") setOpen(false); }}>
+      <select className="input" value={subj} onChange={(e) => setSubj(e.target.value)} aria-label="科目" style={{ height: 28, maxWidth: 130 }} autoFocus>
+        <option value="">未分类</option>
+        {mine.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+      </select>
+      <input className="input num" type="number" min={1} max={max} value={min} aria-label={`时长（分钟，最多 ${max}）`}
+        style={{ width: 64, height: 28 }} onChange={(e) => setMin(Math.floor(+e.target.value || 0))} />
       <span className="muted">分</span>
-      <button className="btn sm primary" disabled={!valid || busy || min === max} onClick={save}>保存</button>
+      <button className="btn sm primary" disabled={!valid || busy || !changed} onClick={save}>保存</button>
       <button className="btn sm ghost" onClick={() => setOpen(false)}>取消</button>
     </span>
   );

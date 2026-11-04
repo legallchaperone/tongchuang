@@ -1,7 +1,8 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
+import { checkComment, COMMENT_MISSING } from "../comments";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ts = (v: any) => (v ? new Date(v).getTime() : null);
@@ -420,6 +421,43 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         .subscribe();
       return () => { sb.removeChannel(ch); };
     },
+    // R-024 自习记录评论
+    async listComments(ownerIds, sinceMs) {
+      if (!ownerIds.length) return [];
+      const out: SessionComment[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from("session_comments").select("*").in("owner_id", ownerIds)
+          .gte("created_at", iso(sinceMs)!).order("created_at", { ascending: true }).range(from, from + 999);
+        if (error) throw commentError(error);
+        out.push(...(data as any[]).map(toComment));
+        if ((data as any[]).length < 1000) break;
+      }
+      return out;
+    },
+    async addComment(c) {
+      const { text, error: bad } = checkComment(c.text);
+      if (bad) throw new Error(bad);
+      const { data, error } = await sb.from("session_comments")
+        .insert({ session_id: c.sessionId, owner_id: c.ownerId, author_id: await myId(), text }).select().single();
+      if (error) throw commentError(error);
+      return toComment(data);
+    },
+    async deleteComment(id) {
+      const { error } = await sb.from("session_comments").delete().eq("id", id);
+      if (error) throw commentError(error);
+    },
+    subscribeComments(ownerIds, cb) {
+      const set = new Set(ownerIds);
+      const ch = sb.channel("comments-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "session_comments" }, (p: any) => {
+          if (p.new?.id && set.has(p.new.owner_id)) cb(toComment(p.new), "insert");
+        })
+        .on("postgres_changes", { event: "DELETE", schema: "public", table: "session_comments" }, (p: any) => {
+          if (p.old?.id) cb(toComment(p.old), "delete");
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
     subscribeGuestbookReplies(me, cb) {
       const ch = sb.channel("gbr-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `reply_to=eq.${me}` }, (p: any) => {
@@ -435,6 +473,17 @@ const toGuestbook = (r: any): GuestbookEntry => ({
   id: r.id, ownerId: r.owner_id, authorId: r.author_id || "", text: r.text || "", sticker: r.sticker || null, createdAt: ts(r.created_at) || 0,
   parentId: r.parent_id || null, replyTo: r.reply_to || null,
 });
+const toComment = (r: any): SessionComment => ({
+  id: r.id, sessionId: r.session_id || "", ownerId: r.owner_id || "", authorId: r.author_id || "", text: r.text || "", createdAt: ts(r.created_at) || 0,
+});
+function commentError(e: { message: string; code?: string }): Error {
+  const m = e.message || "";
+  if (e.code === "42P01" || e.code === "PGRST205" || (/session_comments/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(COMMENT_MISSING);
+  if (/row-level security/i.test(m)) return new Error("只能评论同一个自习室的同窗的记录");
+  if (/text_check/.test(m)) return new Error("最多 100 个字");
+  if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
+  return new Error(m);
+}
 /** R-020: the usual failures in plain Chinese */
 function guestbookError(e: { message: string; code?: string }): Error {
   const m = e.message || "";

@@ -1,7 +1,8 @@
 import type { Backend } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
+import { checkComment } from "../comments";
 import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
@@ -23,6 +24,7 @@ type DB = {
   reviews?: DailyReview[];
   /** R-020 留言板; added lazily to older demo data */
   guestbook?: GuestbookEntry[];
+  comments?: SessionComment[];
 };
 
 function rng(seed: number) {
@@ -245,12 +247,32 @@ function seedGuestbook(): GuestbookEntry[] {
   ];
 }
 
+/* ── R-024: a few comments on recent records ── */
+const CM_ON_MINE = ["这段好长，佩服", "论文加油！", "我也在学这个", "专注度好高"];
+const CM_THANKS = ["哈哈谢谢", "一起冲", "你也加油！", "明天继续"];
+function seedComments(db: DB): SessionComment[] {
+  const out: SessionComment[] = [];
+  const recent = [...db.sessions].sort((a, b) => b.endedAt - a.endedAt).slice(0, 14);
+  const friends = db.profiles.filter((p) => p.id !== ME).map((p) => p.id);
+  recent.forEach((x, i) => {
+    if (i % 3) return;
+    const by = x.userId === ME ? friends[i % friends.length] : ME;
+    if (!by) return;
+    const c = (authorId: UserId, text: string, after: number): SessionComment =>
+      ({ id: uid(), sessionId: x.id, ownerId: x.userId, authorId, text, createdAt: x.endedAt + after });
+    out.push(c(by, x.userId === ME ? CM_ON_MINE[i % CM_ON_MINE.length] : "这节学得怎么样？", 12 * MIN));
+    if (i % 2 === 0) out.push(c(x.userId, x.userId === ME ? "谢谢～" : CM_THANKS[i % CM_THANKS.length], 30 * MIN));
+  });
+  return out;
+}
+
 export function createDemoBackend(): Backend {
   let db: DB;
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* full */ } };
   if (!db.reviews) db.reviews = seedReviews(db);
   if (!db.guestbook) db.guestbook = seedGuestbook();
+  if (!db.comments) db.comments = seedComments(db);
   // R-020: older demo data has no pages yet
   db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
@@ -281,6 +303,8 @@ export function createDemoBackend(): Backend {
     const e: GuestbookEntry = { id: uid(), ownerId: parent.ownerId, authorId: friendId, text, sticker: null, createdAt: Date.now(), parentId: parent.id, replyTo: ME };
     db.guestbook!.push(e); save(); emitGb(e, "insert"); emitReply(e);
   }
+  const cmSubs = new Set<{ ids: Set<UserId>; cb: (c: SessionComment, kind: "insert" | "delete") => void }>();
+  const emitCm = (c: SessionComment, kind: "insert" | "delete") => cmSubs.forEach((x) => x.ids.has(c.ownerId) && x.cb({ ...c }, kind));
   const sharesRoom = (a: UserId, b: UserId) => a === b || db.rooms.some((r) => r.memberIds.includes(a) && r.memberIds.includes(b));
   /** a classmate leaves me a note (and I get the toast) */
   const gbLastFrom = new Map<UserId, number>();
@@ -564,6 +588,30 @@ export function createDemoBackend(): Backend {
       db.guestbook = db.guestbook!.filter((x) => !gone.includes(x)); save(); gone.forEach((x) => emitGb(x, "delete"));
     },
     subscribeGuestbook(ownerId, cb) { const s = { ownerId, cb }; gbSubs.add(s); return () => { gbSubs.delete(s); }; },
+    // R-024 自习记录评论
+    listComments: async (ownerIds, since) => delay(db.comments!.filter((c) => ownerIds.includes(c.ownerId) && c.createdAt >= since)
+      .sort((a, b) => a.createdAt - b.createdAt).map((c) => ({ ...c }))),
+    async addComment({ sessionId, ownerId, text: raw }) {
+      const { text, error } = checkComment(raw);
+      if (error) throw new Error(error);
+      if (!sharesRoom(ME, ownerId) || !db.sessions.some((x) => x.id === sessionId && x.userId === ownerId)) throw new Error("只能评论同一个自习室的同窗的记录");
+      const c: SessionComment = { id: uid(), sessionId, ownerId, authorId: ME, text, createdAt: Date.now() };
+      db.comments!.push(c); save(); emitCm(c, "insert");
+      // the classmate answers a moment later
+      if (ownerId !== ME) setTimeout(() => {
+        if (!db.sessions.some((x) => x.id === sessionId)) return;
+        const back: SessionComment = { id: uid(), sessionId, ownerId, authorId: ownerId, text: CM_THANKS[Math.floor(Math.random() * CM_THANKS.length)], createdAt: Date.now() };
+        db.comments!.push(back); save(); emitCm(back, "insert");
+      }, 2500 + Math.random() * 2000);
+      return { ...c };
+    },
+    async deleteComment(id) {
+      const c = db.comments!.find((x) => x.id === id);
+      if (!c) return;
+      if (c.authorId !== ME && c.ownerId !== ME) throw new Error("只有评论的人和记录主人能删");
+      db.comments = db.comments!.filter((x) => x !== c); save(); emitCm(c, "delete");
+    },
+    subscribeComments(ownerIds, cb) { const x = { ids: new Set(ownerIds), cb }; cmSubs.add(x); return () => { cmSubs.delete(x); }; },
     subscribeGuestbookReplies(_me, cb) { gbReplySubs.add(cb); return () => { gbReplySubs.delete(cb); }; },
   };
 }

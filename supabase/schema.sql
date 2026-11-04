@@ -337,6 +337,36 @@ create policy "guestbook write" on public.guestbook for insert with check (
   and public.guestbook_parent_ok(parent_id, owner_id)
 );
 
+-- ───────────── R-024 自习记录评论 ─────────────
+-- 动态里每条专注记录下面可以评论（≤ 100 字）。owner_id 是记录的主人，冗余存一份，方便按人读取和实时推送。
+-- 同自习室的人能看能评；评论的人和记录主人能删；不能修改。记录删掉，评论一起没。可重复运行。
+create table if not exists public.session_comments (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.sessions(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete cascade,
+  text text not null check (char_length(btrim(text)) between 1 and 100),
+  created_at timestamptz not null default now()
+);
+create index if not exists session_comments_session_idx on public.session_comments(session_id, created_at);
+create index if not exists session_comments_owner_idx on public.session_comments(owner_id, created_at desc);
+
+alter table public.session_comments enable row level security;
+drop policy if exists "comments read" on public.session_comments;
+create policy "comments read" on public.session_comments for select using (public.shares_room(auth.uid(), owner_id));
+drop policy if exists "comments write" on public.session_comments;
+create policy "comments write" on public.session_comments for insert with check (
+  author_id = auth.uid() and public.shares_room(auth.uid(), owner_id)
+  and exists (select 1 from public.sessions s where s.id = session_id and s.user_id = owner_id)
+);
+drop policy if exists "comments delete" on public.session_comments;
+create policy "comments delete" on public.session_comments for delete using (author_id = auth.uid() or owner_id = auth.uid());
+
+alter table public.session_comments replica identity full;
+do $$ begin
+  begin alter publication supabase_realtime add table public.session_comments; exception when others then null; end;
+end $$;
+
 -- ───────────── R-020 个人主页 ─────────────
 -- 幂等：可重复运行。签名、小组件列表和各自设置存在 profiles.page 里，结构：
 --   { "bio": "≤40 字", "widgets": [{ "id", "type", "size": "s"|"w", "config": {} }], "guestbook": false（关掉留言板时才有） }

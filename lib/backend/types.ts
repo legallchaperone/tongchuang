@@ -1,4 +1,4 @@
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -88,4 +88,13 @@ export interface Backend {
   subscribeGuestbook(ownerId: UserId, cb: (e: GuestbookEntry, kind: "insert" | "delete") => void): Unsub;
   /** R-023: replies to me on anyone's board */
   subscribeGuestbookReplies(me: UserId, cb: (e: GuestbookEntry) => void): Unsub;
+
+  // R-024 自习记录评论
+  /** comments on these people's records, written since sinceMs, oldest first */
+  listComments(ownerIds: UserId[], sinceMs: number): Promise<SessionComment[]>;
+  addComment(c: { sessionId: string; ownerId: UserId; text: string }): Promise<SessionComment>;
+  /** the author or the record's owner can delete it */
+  deleteComment(id: string): Promise<void>;
+  /** realtime: comments added to / removed from these people's records (a delete may only carry the id) */
+  subscribeComments(ownerIds: UserId[], cb: (c: SessionComment, kind: "insert" | "delete") => void): Unsub;
 }
