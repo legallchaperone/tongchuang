@@ -893,6 +893,7 @@ button.st-line.add { color: var(--ink-3); }
   .gb-cork { padding: 20px 8px 14px; }
   .gb-notes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 10px; }
   .gb-paper { padding: 14px 8px 8px; }
+}
 
 /* ---- R-021 分享一天 ---- */
 .hero { position: relative; }
