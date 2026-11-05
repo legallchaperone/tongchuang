@@ -146,6 +146,13 @@ export default function SettingsPage() {
             ) : (
               <span className="subj-row-name" style={{ color: s.archived ? "var(--ink-3)" : undefined }}>{s.name}{s.archived && "（已归档）"}</span>
             )}
+            {renaming?.id !== s.id && app.folders.length > 0 && (
+              <select className="input subj-folder" aria-label={`「${s.name}」放在哪个文件夹`} value={s.folderId && app.folders.some((f) => f.id === s.folderId) ? s.folderId : ""}
+                onChange={(e) => app.saveSubject({ ...s, folderId: e.target.value || null }).catch((err) => app.pushToast({ title: "没能移动", body: (err as Error).message }))}>
+                <option value="">不放文件夹</option>
+                {app.folders.map((f) => <option key={f.id} value={f.id}>📂 {f.name}</option>)}
+              </select>
+            )}
             {renaming?.id !== s.id && <span className="subj-row-acts">
               <button className="btn sm ghost" onClick={() => setRenaming({ id: s.id, name: s.name })}>改名</button>
               <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, color: (s.color + 1) % 8 })}>换色</button>
@@ -164,6 +171,7 @@ export default function SettingsPage() {
           <input className="input" aria-label="新科目名称" placeholder="新科目名称" maxLength={40} value={newSubj} onChange={(e) => setNewSubj(e.target.value)} />
           <button className="btn sm" type="submit" disabled={!newSubj.trim()}>添加</button>
         </form>
+        <FolderList />
         {subjSheet && <SubjectSheet subject={subjSheet.s} kind={subjSheet.kind} onClose={() => setSubjSheet(null)} />}
       </section>
 
@@ -206,6 +214,61 @@ export default function SettingsPage() {
         <button className="btn" onClick={async () => { await app.signOut(); router.replace("/login"); }}>退出登录</button>
         {app.backend.mode === "demo" && <button className="btn ghost" onClick={() => { resetDemo(); location.reload(); }}>重置演示数据</button>}
       </div>
+    </div>
+  );
+}
+
+/** R-026: my subject folders: add, rename, delete (subjects inside go back to the top level) */
+function FolderList() {
+  const app = useApp();
+  const [name, setName] = useState("");
+  const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const fail = (title: string) => (e: unknown) => app.pushToast({ title, body: (e as Error).message });
+  const count = (id: string) => app.subjects.filter((x) => x.folderId === id).length;
+  return (
+    <div className="folders">
+      <h3>文件夹 <span className="muted">只有你自己看得到</span></h3>
+      {app.foldersError && <p className="muted">{app.foldersError}</p>}
+      {app.folders.map((f) => (
+        <div key={f.id} className="subj-row">
+          <span aria-hidden>📂</span>
+          {edit?.id === f.id ? (
+            <form className="subj-rename" onSubmit={(e) => { e.preventDefault(); if (edit.name.trim()) app.saveFolder({ id: f.id, name: edit.name }).then(() => setEdit(null), fail("没能改名")); }}>
+              <input className="input" autoFocus maxLength={40} value={edit.name} aria-label={`文件夹「${f.name}」的新名字`}
+                onChange={(e) => setEdit({ id: f.id, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Escape") setEdit(null); }} />
+              <button className="btn sm primary" type="submit" disabled={!edit.name.trim()}>保存</button>
+              <button className="btn sm ghost" type="button" onClick={() => setEdit(null)}>取消</button>
+            </form>
+          ) : (
+            <>
+              <span className="subj-row-name">{f.name} <span className="muted num">{count(f.id)} 个科目</span></span>
+              <span className="subj-row-acts">
+                {confirm === f.id ? (
+                  <>
+                    <span className="muted">里面的科目会移到外面</span>
+                    <button className="btn sm ghost subj-del" onClick={() => { setConfirm(null); app.deleteFolder(f.id).catch(fail("没能删除")); }}>删除</button>
+                    <button className="btn sm ghost" onClick={() => setConfirm(null)}>留着</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn sm ghost" onClick={() => setEdit({ id: f.id, name: f.name })}>改名</button>
+                    <button className="btn sm ghost subj-del" onClick={() => setConfirm(f.id)}>删除</button>
+                  </>
+                )}
+              </span>
+            </>
+          )}
+        </div>
+      ))}
+      <form className="subj-add" onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        app.saveFolder({ name }).then(() => setName(""), fail("没能新建文件夹"));
+      }}>
+        <input className="input" aria-label="新文件夹名称" placeholder="新文件夹，例如：考研" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="btn sm" type="submit" disabled={!name.trim()}>新建文件夹</button>
+      </form>
     </div>
   );
 }

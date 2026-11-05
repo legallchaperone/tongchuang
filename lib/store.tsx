@@ -2,7 +2,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getBackend } from "./backend";
 import type { Backend } from "./backend/types";
-import type { AuthUser, DailyReview, Kudos, SessionComment, Todo, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
+import type { AuthUser, DailyReview, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, PersonalStatus, Profile, Room, Session, Signal, Subject, UserId } from "./types";
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
@@ -132,6 +132,11 @@ interface Ctx {
   addTodo(t: { text: string; subjectId: string | null; estimateMin: number | null }): Promise<Todo>;
   updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
   deleteTodo(id: string): Promise<void>;
+  /** R-026: my subject folders (private); [] while loading or before the migration */
+  folders: SubjectFolder[];
+  foldersError: string | null;
+  saveFolder(f: { id?: string; name: string }): Promise<SubjectFolder>;
+  deleteFolder(id: string): Promise<void>;
 }
 
 type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -179,6 +184,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [comments, setComments] = useState<SessionComment[]>([]);
   const [todos, setTodos] = useState<Todo[] | null>(null);
   const [todosError, setTodosError] = useState<string | null>(null);
+  const [folders, setFolders] = useState<SubjectFolder[]>([]);
+  const [foldersError, setFoldersError] = useState<string | null>(null);
   const commentsRef = useRef(comments);
   commentsRef.current = comments;
   const [historyBusy, setHistoryBusy] = useState(0);
@@ -280,7 +287,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     inflightRef.current.clear();
     if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null; }
     dropSnapshots();
-    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]); setComments([]); setTodos(null); setTodosError(null);
+    setRooms([]); setProfiles({}); setSubjects([]); setSessions([]); setLiveMap({}); setKudos([]); setOnline(new Set()); setReviews([]); setComments([]); setTodos(null); setTodosError(null); setFolders([]); setFoldersError(null);
     setStatus("signedOut");
   }, []);
 
@@ -492,6 +499,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; };
   }, [status, me, backend]);
 
+  // R-026 科目文件夹: mine only
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    let alive = true;
+    backend.listFolders()
+      .then((fs) => { if (alive) { setFolders(fs); setFoldersError(null); } })
+      .catch((e) => { if (alive) setFoldersError((e as Error).message || "文件夹没加载出来"); });
+    return () => { alive = false; };
+  }, [status, me, backend]);
+
   // R-020 留言板: someone left a note on my board → a toast on whatever page I'm on
   useEffect(() => {
     if (status !== "ready" || !me) return;
@@ -662,6 +679,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
     async signOut() { dropSnapshots(); await backend.signOut(); },
+    folders, foldersError,
+    async saveFolder(f) {
+      const saved = await backend.saveFolder(f);
+      setFolders((l) => (l.some((x) => x.id === saved.id) ? l.map((x) => (x.id === saved.id ? saved : x)) : [...l, saved]));
+      return saved;
+    },
+    async deleteFolder(id) {
+      await backend.deleteFolder(id);
+      setFolders((l) => l.filter((x) => x.id !== id));
+      setSubjects((l) => l.map((x) => (x.folderId === id ? { ...x, folderId: null } : x)));
+    },
     todos, todosError,
     async addTodo(t) {
       const saved = await backend.addTodo(t);

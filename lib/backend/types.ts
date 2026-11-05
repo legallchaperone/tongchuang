@@ -1,4 +1,4 @@
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -103,4 +103,10 @@ export interface Backend {
   addTodo(t: { text: string; subjectId: string | null; estimateMin: number | null }): Promise<Todo>;
   updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
   deleteTodo(id: string): Promise<void>;
+
+  // R-026 科目文件夹 (only mine)
+  listFolders(): Promise<SubjectFolder[]>;
+  saveFolder(f: { id?: string; name: string }): Promise<SubjectFolder>;
+  /** its subjects go back to the top level */
+  deleteFolder(id: string): Promise<void>;
 }

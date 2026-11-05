@@ -37,6 +37,8 @@ export interface Subject {
   name: string;
   color: number;
   archived: boolean;
+  /** R-026: my own folder for it (private to me; null = top level) */
+  folderId?: string | null;
 }
 
 /**
@@ -182,5 +184,13 @@ export interface Todo {
   estimateMin: number | null;
   /** null = not done yet */
   doneAt: number | null;
+  createdAt: number;
+}
+
+/** R-026: a private folder that groups some of my subjects (e.g. “考研”: 线代, 英语) */
+export interface SubjectFolder {
+  id: string;
+  userId: UserId;
+  name: string;
   createdAt: number;
 }

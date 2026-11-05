@@ -396,6 +396,20 @@ create policy "todos own" on public.todos for all using (user_id = auth.uid()) w
 alter table public.sessions add column if not exists todo_id uuid references public.todos(id) on delete set null;
 create index if not exists sessions_todo_idx on public.sessions(todo_id) where todo_id is not null;
 
+-- ───────────── R-026 科目文件夹 ─────────────
+-- 把几个科目放进一个文件夹（只有一层）。文件夹只有自己能看能改；subjects.folder_id 指向它，删掉文件夹时科目回到最外层。可重复运行。
+create table if not exists public.subject_folders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name text not null check (char_length(btrim(name)) between 1 and 40),
+  created_at timestamptz not null default now()
+);
+create index if not exists subject_folders_user_idx on public.subject_folders(user_id, created_at);
+alter table public.subject_folders enable row level security;
+drop policy if exists "folders own" on public.subject_folders;
+create policy "folders own" on public.subject_folders for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+alter table public.subjects add column if not exists folder_id uuid references public.subject_folders(id) on delete set null;
+
 -- ───────────── R-020 个人主页 ─────────────
 -- 幂等：可重复运行。签名、小组件列表和各自设置存在 profiles.page 里，结构：
 --   { "bio": "≤40 字", "widgets": [{ "id", "type", "size": "s"|"w", "config": {} }], "guestbook": false（关掉留言板时才有） }

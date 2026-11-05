@@ -14,6 +14,8 @@ import { IPlay, ITrash } from "./Icons";
 const estOf = (ts: Todo[]) => ts.reduce((a, t) => a + (t.estimateMin || 0), 0);
 /** " · 约 45 分" / " · 约 2.5 小时" / "" when nothing is estimated */
 const totalTxt = (min: number) => (min ? ` · ${fmtTotal(min)}` : "");
+/** folders I have collapsed on this device */
+const FOLDS = "tc-todo-folds-v1";
 /** "约 45 分" / "约 2.5 小时" */
 function fmtTotal(min: number) {
   if (min < 60) return `约 ${min} 分`;
@@ -44,29 +46,32 @@ export function TodoCard({ onPick, busy }: { onPick: (t: Todo) => void; /** a fo
     const order = [...mine.map((s) => s.id), "none"];
     return order.filter((k) => by.has(k)).map((k) => ({ key: k, subject: mine.find((s) => s.id === k) || null, items: by.get(k)! }));
   }, [open, mine]);
+  // R-026: subjects outside any folder first, then each folder with its subjects, then 未分类
+  type Group = (typeof groups)[number];
+  const tree = useMemo(() => {
+    const fids = new Set(app.folders.map((f) => f.id));
+    const inFolder = (g: Group) => (g.subject?.folderId && fids.has(g.subject.folderId) ? g.subject.folderId : null);
+    const top = groups.filter((g) => g.subject && !inFolder(g));
+    const folders = app.folders.map((f) => ({ folder: f, groups: groups.filter((g) => inFolder(g) === f.id) })).filter((x) => x.groups.length);
+    return { top, folders, none: groups.find((g) => !g.subject) || null };
+  }, [groups, app.folders]);
+  const [folded, setFolded] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(FOLDS) || "[]")); } catch { return new Set(); }
+  });
+  function toggleFold(id: string) {
+    setFolded((cur) => {
+      const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id);
+      try { localStorage.setItem(FOLDS, JSON.stringify(Array.from(n))); } catch { /* private mode */ }
+      return n;
+    });
+  }
   const totalMin = estOf(open);
 
   async function act(f: () => Promise<unknown>, fail: string) {
     try { await f(); } catch (e) { app.pushToast({ title: fail, body: (e as Error).message }); }
   }
 
-  if (app.todosError) {
-    return (
-      <section className="card todo-card" style={{ order: 3 }}>
-        <div className="cardhead"><h2>待办</h2></div>
-        <div className="cardbody"><p className="muted">{app.todosError}</p></div>
-      </section>
-    );
-  }
-  return (
-    <section className="card todo-card" style={{ order: 3 }} aria-label="待办">
-      <div className="cardhead"><h2>待办</h2>{open.length > 0 && <span className="hint num">{open.length} 项{totalTxt(totalMin)}</span>}</div>
-      <div className="cardbody td-body">
-        {/* keyed on loading so the subject defaults to the last one used once the list is in */}
-        <TodoEditor key={app.todos ? "new" : "loading"} submitLabel="添加" onSubmit={(v) => app.addTodo(v).then(() => undefined)} />
-        {app.todos == null ? <p className="muted">正在加载…</p> : open.length === 0 && !done.length ? null : (
-          <div className="td-groups">
-            {groups.map((g) => (
+  const renderGroup = (g: Group) => (
               <div key={g.key} className="td-group">
                 <h3 className="td-ghead">
                   <span className="dot" style={{ background: g.subject ? seriesVar(g.subject.color) : "var(--ink-3)" }} />
@@ -87,7 +92,40 @@ export function TodoCard({ onPick, busy }: { onPick: (t: Todo) => void; /** a fo
                   ))}
                 </ul>
               </div>
-            ))}
+  );
+
+  if (app.todosError) {
+    return (
+      <section className="card todo-card" style={{ order: 3 }}>
+        <div className="cardhead"><h2>待办</h2></div>
+        <div className="cardbody"><p className="muted">{app.todosError}</p></div>
+      </section>
+    );
+  }
+  return (
+    <section className="card todo-card" style={{ order: 3 }} aria-label="待办">
+      <div className="cardhead"><h2>待办</h2>{open.length > 0 && <span className="hint num">{open.length} 项{totalTxt(totalMin)}</span>}</div>
+      <div className="cardbody td-body">
+        {/* keyed on loading so the subject defaults to the last one used once the list is in */}
+        <TodoEditor key={app.todos ? "new" : "loading"} submitLabel="添加" onSubmit={(v) => app.addTodo(v).then(() => undefined)} />
+        {app.todos == null ? <p className="muted">正在加载…</p> : open.length === 0 && !done.length ? null : (
+          <div className="td-groups">
+            {tree.top.map(renderGroup)}
+            {tree.folders.map(({ folder, groups: gs }) => {
+              const n = gs.reduce((a, g) => a + g.items.length, 0);
+              const shut = folded.has(folder.id);
+              return (
+                <div key={folder.id} className="td-folder">
+                  <button type="button" className="td-fhead" aria-expanded={!shut} onClick={() => toggleFold(folder.id)}>
+                    <span aria-hidden>{shut ? "▸" : "▾"}</span><span aria-hidden>📂</span>
+                    <span className="td-gname">{folder.name}</span>
+                    <span className="muted num">{n} 项{totalTxt(gs.reduce((a, g) => a + estOf(g.items), 0))}</span>
+                  </button>
+                  {!shut && <div className="td-fbody">{gs.map(renderGroup)}</div>}
+                </div>
+              );
+            })}
+            {tree.none && renderGroup(tree.none)}
             {done.length > 0 && (
               <div className="td-group td-done">
                 <button type="button" className="td-done-toggle" aria-expanded={showDone} onClick={() => setShowDone((v) => !v)}>
@@ -137,6 +175,7 @@ function TodoRow({ t, used, busy, onDone, onEdit, onPick, onDelete }: {
   );
 }
 
+const NEW = "__new";
 /** add a to-do, or edit one: text, subject, estimate */
 function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
   initial?: Todo; submitLabel: string; onSubmit: (v: { text: string; subjectId: string | null; estimateMin: number | null }) => Promise<void>; onCancel?: () => void;
@@ -151,6 +190,15 @@ function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** typing a new subject's name (null = picking from the list) */
+  const [newSubj, setNewSubj] = useState<string | null>(null);
+  async function addSubject() {
+    const name = (newSubj || "").trim();
+    setNewSubj(null);
+    if (!name) return;
+    try { const s = await app.ensureSubject(name); setSubjectId(s.id); }
+    catch (e) { setErr((e as Error).message || "没能添加科目"); }
+  }
   const len = Array.from(text.trim()).length;
   async function submit(ev?: React.FormEvent) {
     ev?.preventDefault();
@@ -173,10 +221,18 @@ function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
         {onCancel && <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>取消</button>}
       </div>
       <div className="td-editor-row td-opts">
-        <select className="input td-subj" value={subjectId || ""} onChange={(e) => setSubjectId(e.target.value || null)} aria-label="科目">
-          <option value="">未分类</option>
-          {mine.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        {newSubj != null ? (
+          <input className="input td-subj" autoFocus value={newSubj} maxLength={40} placeholder="新科目名字" aria-label="新科目名字"
+            onChange={(e) => setNewSubj(e.target.value)} onBlur={addSubject}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); addSubject(); } if (e.key === "Escape") { e.stopPropagation(); setNewSubj(null); } }} />
+        ) : (
+          <select className="input td-subj" value={subjectId || ""} aria-label="科目"
+            onChange={(e) => { if (e.target.value === NEW) setNewSubj(""); else setSubjectId(e.target.value || null); }}>
+            <option value="">未分类</option>
+            {mine.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value={NEW}>＋ 新科目…</option>
+          </select>
+        )}
         <span className="muted td-est-lbl">预估</span>
         <div className="seg td-est-seg" role="group" aria-label="预估时间（可不选）">
           {TODO_ESTIMATES.map((m) => (

@@ -1,5 +1,5 @@
 import type { Backend } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
 import { checkComment } from "../comments";
@@ -27,6 +27,7 @@ type DB = {
   guestbook?: GuestbookEntry[];
   comments?: SessionComment[];
   todos?: Todo[];
+  folders?: SubjectFolder[];
 };
 
 function rng(seed: number) {
@@ -295,6 +296,12 @@ export function createDemoBackend(): Backend {
   if (!db.guestbook) db.guestbook = seedGuestbook();
   if (!db.comments) db.comments = seedComments(db);
   if (!db.todos) db.todos = seedTodos(db);
+  // R-026: one folder to start with, holding the two exam subjects
+  if (!db.folders) {
+    const f: SubjectFolder = { id: uid(), userId: ME, name: "考研", createdAt: Date.now() };
+    db.folders = [f];
+    db.subjects.forEach((x) => { if (x.userId === ME && (x.name === "线性代数" || x.name === "英语阅读")) x.folderId = f.id; });
+  }
   // R-020: older demo data has no pages yet
   db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
@@ -657,6 +664,21 @@ export function createDemoBackend(): Backend {
     async deleteTodo(id) {
       db.todos = db.todos!.filter((x) => x.id !== id);
       db.sessions.forEach((s) => { if (s.todoId === id) s.todoId = null; });
+      save();
+    },
+    // R-026 科目文件夹
+    listFolders: async () => delay(db.folders!.map((f) => ({ ...f }))),
+    async saveFolder({ id, name: raw }) {
+      const name = raw.trim();
+      if (!name) throw new Error("文件夹名字不能为空");
+      const hit = id && db.folders!.find((x) => x.id === id);
+      if (hit) { hit.name = name; save(); return { ...hit }; }
+      const f: SubjectFolder = { id: uid(), userId: ME, name, createdAt: Date.now() };
+      db.folders!.push(f); save(); return { ...f };
+    },
+    async deleteFolder(id) {
+      db.folders = db.folders!.filter((x) => x.id !== id);
+      db.subjects.forEach((x) => { if (x.folderId === id) x.folderId = null; });
       save();
     },
     subscribeGuestbookReplies(_me, cb) { gbReplySubs.add(cb); return () => { gbReplySubs.delete(cb); }; },

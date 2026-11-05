@@ -1,9 +1,10 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
 import { checkTodo, TODO_MISSING } from "../todos";
+const FOLDER_MISSING = "文件夹还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ts = (v: any) => (v ? new Date(v).getTime() : null);
@@ -16,7 +17,7 @@ const toProfile = (r: any): Profile => ({
   focusPrefs: r.focus_prefs && typeof r.focus_prefs === "object" ? r.focus_prefs : null,
   page: r.page && typeof r.page === "object" ? r.page : null,
 });
-const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.name, color: r.color ?? 0, archived: !!r.archived });
+const toSubject = (r: any): Subject => ({ id: r.id, userId: r.user_id, name: r.name, color: r.color ?? 0, archived: !!r.archived, folderId: r.folder_id || null });
 const toSession = (r: any): Session => ({
   id: r.id, userId: r.user_id, subjectId: r.subject_id, task: r.task || "",
   startedAt: ts(r.started_at)!, endedAt: ts(r.ended_at)!, durationMs: Number(r.duration_ms),
@@ -145,7 +146,14 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     async saveSubject(s) {
       const row: any = { user_id: s.userId, name: s.name, color: s.color, archived: s.archived };
       if (s.id) row.id = s.id;
-      return toSubject(check(await sb.from("subjects").upsert(row).select().single()));
+      if ("folderId" in s) row.folder_id = s.folderId ?? null;
+      let res = await sb.from("subjects").upsert(row).select().single();
+      // R-026 not migrated yet: save everything but the folder
+      if (res.error && "folder_id" in row && /folder_id/.test(res.error.message)) {
+        if (row.folder_id) throw new Error(FOLDER_MISSING);
+        delete row.folder_id; res = await sb.from("subjects").upsert(row).select().single();
+      }
+      return toSubject(check(res));
     },
     async countSubjectSessions(id) {
       const { count, error } = await sb.from("sessions").select("id", { count: "exact", head: true }).eq("subject_id", id);
@@ -491,6 +499,25 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       const { error } = await sb.from("todos").delete().eq("id", id);
       if (error) throw todoError(error);
     },
+    // R-026 科目文件夹
+    async listFolders() {
+      const { data, error } = await sb.from("subject_folders").select("*").eq("user_id", await myId()).order("created_at");
+      if (error) throw folderError(error);
+      return (data as any[]).map(toFolder);
+    },
+    async saveFolder(f) {
+      const name = f.name.trim();
+      if (!name) throw new Error("文件夹名字不能为空");
+      const row: any = { user_id: await myId(), name };
+      if (f.id) row.id = f.id;
+      const { data, error } = await sb.from("subject_folders").upsert(row).select().single();
+      if (error) throw folderError(error);
+      return toFolder(data);
+    },
+    async deleteFolder(id) {
+      const { error } = await sb.from("subject_folders").delete().eq("id", id);
+      if (error) throw folderError(error);
+    },
     subscribeGuestbookReplies(me, cb) {
       const ch = sb.channel("gbr-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `reply_to=eq.${me}` }, (p: any) => {
@@ -529,6 +556,13 @@ function todoError(e: { message: string; code?: string }): Error {
   if (/estimate_min/.test(m) && (e.code === "23502" || e.code === "23514" || /not-null|check constraint/i.test(m))) {
     return new Error("数据库还没更新：请在 Supabase 的 SQL Editor 里重新执行一遍 supabase/schema.sql，之后预估时间就可以不填或自己填了");
   }
+  if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
+  return new Error(m);
+}
+const toFolder = (r: any): SubjectFolder => ({ id: r.id, userId: r.user_id, name: r.name || "", createdAt: ts(r.created_at) || 0 });
+function folderError(e: { message: string; code?: string }): Error {
+  const m = e.message || "";
+  if (e.code === "42P01" || e.code === "PGRST205" || (/subject_folders/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(FOLDER_MISSING);
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }
