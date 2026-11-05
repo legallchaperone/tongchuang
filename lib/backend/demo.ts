@@ -583,6 +583,8 @@ export function createDemoBackend(): Backend {
     },
     async sendSignal(s) { reply(s); },
     onSignal(_me, cb) { sigCbs.add(cb); return () => sigCbs.delete(cb); },
+    async savePushSubscription() { throw new Error("演示模式不能开启推送：数据只在这个浏览器里，没有服务器可以推送"); },
+    async deletePushSubscription() { /* nothing stored */ },
 
     // R-020 留言板
     listGuestbook: async (ownerId, limit) => {

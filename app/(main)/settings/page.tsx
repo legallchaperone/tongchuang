@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { browserTz, COMMON_TZS, hhmm, tzCity } from "@/lib/time";
@@ -15,13 +15,13 @@ import Link from "next/link";
 import { APP_VERSION, BUILD_ID, CHANGELOG } from "@/lib/version";
 import { writeStatusPrefs } from "@/lib/status";
 import { StatusButton, useStatusPrefs } from "@/components/Status";
+import { PushSettings } from "@/components/PushSettings";
 
 export default function SettingsPage() {
   const app = useApp();
   const router = useRouter();
   const [p, setP] = useState<Profile>(app.myProfile!);
   const [saved, setSaved] = useState(false);
-  const [notif, setNotif] = useState<string>("default");
   const [subjSheet, setSubjSheet] = useState<{ s: Subject; kind: "merge" | "delete" } | null>(null);
   const [newSubj, setNewSubj] = useState("");
   /** the subject being renamed, and the name typed so far */
@@ -35,7 +35,6 @@ export default function SettingsPage() {
     try { await app.saveSubject({ ...s, name }); setRenaming(null); }
     catch (err) { app.pushToast({ title: "没能改名", body: (err as Error).message }); }
   }
-  useEffect(() => { if ("Notification" in window) setNotif(Notification.permission); }, []);
   const dirty = JSON.stringify(p) !== JSON.stringify(app.myProfile);
   const fp = prefsOf(p);
   const setFp = (patch: Partial<FocusPrefs>) => setP({ ...p, focusPrefs: { ...fp, ...patch } });
@@ -190,15 +189,7 @@ export default function SettingsPage() {
         <span className="muted" style={{ fontSize: 12 }}>这两项只对当前这台设备生效。</span>
       </section>
 
-      <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <h2>通知</h2>
-        <p className="muted">在后台时，同窗戳你、邀请你一起专注、给你点赞，会弹出系统通知。</p>
-        <div>
-          {notif === "granted" ? <span className="up">已开启</span>
-            : notif === "denied" ? <span className="muted">浏览器已拒绝通知，请在浏览器地址栏的站点设置里开启。</span>
-            : <button className="btn" onClick={async () => setNotif(await Notification.requestPermission())}>开启通知</button>}
-        </div>
-      </section>
+      <PushSettings />
 
       <section className="card pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <h2>关于</h2>

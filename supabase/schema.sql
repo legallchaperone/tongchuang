@@ -416,6 +416,129 @@ alter table public.subjects add column if not exists folder_id uuid references p
 -- 读写权限沿用 profiles 已有的 RLS：同自习室可读，只能改自己的。徽章由专注记录算出，不单独存。
 alter table public.profiles add column if not exists page jsonb;
 
+-- ───────────── v1.11 信号表：戳一下 / 加油 / 邀请 ─────────────
+-- 以前这些信号走公开的 Realtime 广播频道 user:<id>，任何拿到网页 anon key 的人都能伪造，
+-- 而且对方页面关着就收不到。现在写进这张表：只能发给同一自习室的人，限频，对方关着页面也能收到推送。
+-- 只有收发双方能读；旧记录 7 天后清理。可重复运行。
+create table if not exists public.signals (
+  id uuid primary key default gen_random_uuid(),
+  from_user uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  to_user uuid not null references auth.users(id) on delete cascade,
+  kind text not null check (kind in ('poke', 'cheer', 'invite')),
+  payload jsonb not null default '{}'::jsonb check (octet_length(payload::text) <= 1000),
+  created_at timestamptz not null default now()
+);
+create index if not exists signals_to_idx on public.signals(to_user, created_at desc);
+create index if not exists signals_from_idx on public.signals(from_user, created_at desc);
+alter table public.signals enable row level security;
+drop policy if exists "signals read" on public.signals;
+create policy "signals read" on public.signals for select using (to_user = auth.uid() or from_user = auth.uid());
+drop policy if exists "signals send" on public.signals;
+create policy "signals send" on public.signals for insert with check (
+  from_user = auth.uid() and to_user <> auth.uid() and public.shares_room(auth.uid(), to_user)
+);
+
+-- 内容检查 + 限频：同一个人一分钟最多 3 次，总共一分钟最多 20 次
+create or replace function public.guard_signal()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.kind = 'cheer' and char_length(coalesce(new.payload->>'text', '')) not between 1 and 60 then
+    raise exception 'signal text must be 1-60 characters';
+  end if;
+  if new.kind = 'invite' and (
+    coalesce(new.payload->>'mode', '') not in ('pomodoro', 'stopwatch', 'countdown')
+    or coalesce((new.payload->>'minutes')::int, 0) not between 1 and 600
+    or char_length(coalesce(new.payload->>'task', '')) > 80
+  ) then
+    raise exception 'bad invite';
+  end if;
+  if (select count(*) from signals where from_user = new.from_user and to_user = new.to_user and created_at > now() - interval '1 minute') >= 3
+     or (select count(*) from signals where from_user = new.from_user and created_at > now() - interval '1 minute') >= 20 then
+    raise exception 'too many signals';
+  end if;
+  delete from signals where from_user = new.from_user and created_at < now() - interval '7 days';
+  return new;
+end $$;
+drop trigger if exists signals_guard on public.signals;
+create trigger signals_guard before insert on public.signals for each row execute function public.guard_signal();
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.signals; exception when others then null; end;
+end $$;
+
+-- ───────────── v1.11 推送通知（Web Push） ─────────────
+-- 每台开了推送的设备（浏览器 / 加到主屏幕的 iPhone）一行。endpoint 是推送服务给的地址，本身就是凭据，所以只有本人能读写。
+-- 同一台设备换了账号登录时，save_push_subscription 会把这台设备转到新账号名下。可重复运行。
+create table if not exists public.push_subscriptions (
+  endpoint text primary key check (char_length(endpoint) <= 1000),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  p256dh text not null check (char_length(p256dh) <= 200),
+  auth text not null check (char_length(auth) <= 100),
+  ua text not null default '' check (char_length(ua) <= 200),
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz
+);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions(user_id);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "push own" on public.push_subscriptions;
+create policy "push own" on public.push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_ua text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  delete from push_subscriptions where endpoint = p_endpoint and user_id <> auth.uid();
+  insert into push_subscriptions(endpoint, user_id, p256dh, auth, ua) values (p_endpoint, auth.uid(), p_p256dh, p_auth, left(coalesce(p_ua, ''), 200))
+  on conflict (endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth, ua = excluded.ua;
+end $$;
+
+-- 推送函数的地址和暗号。只有数据库自己（security definer 函数）能读：开了 RLS 又没有任何策略。
+-- 配置方法见 docs/web-push.md；没配置时下面的触发器什么都不做。
+create table if not exists public.push_config (
+  id boolean primary key default true check (id),
+  function_url text not null,
+  secret text not null
+);
+alter table public.push_config enable row level security;
+revoke all on public.push_config from anon, authenticated;
+
+do $$ begin create extension if not exists pg_net; exception when others then null; end $$;
+
+-- 把一条事件交给 Edge Function `webpush`，由它决定推给谁、写什么。失败不影响原来的写入。
+create or replace function public.push_notify(event jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+declare c push_config;
+begin
+  select * into c from push_config where id;
+  if c.function_url is null then return; end if;
+  begin
+    perform net.http_post(
+      url := c.function_url,
+      body := event,
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-tongchuang-secret', c.secret)
+    );
+  exception when others then null; -- pg_net 没开：推送不出去，但不影响写入
+  end;
+end $$;
+revoke execute on function public.push_notify(jsonb) from public, anon, authenticated;
+
+create or replace function public.push_on_insert()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.push_notify(jsonb_build_object('type', tg_table_name, 'record', to_jsonb(new)));
+  return null;
+end $$;
+revoke execute on function public.push_on_insert() from public, anon, authenticated;
+
+drop trigger if exists signals_push on public.signals;
+create trigger signals_push after insert on public.signals for each row execute function public.push_on_insert();
+drop trigger if exists kudos_push on public.kudos;
+create trigger kudos_push after insert on public.kudos for each row execute function public.push_on_insert();
+drop trigger if exists session_comments_push on public.session_comments;
+create trigger session_comments_push after insert on public.session_comments for each row execute function public.push_on_insert();
+drop trigger if exists guestbook_push on public.guestbook;
+create trigger guestbook_push after insert on public.guestbook for each row execute function public.push_on_insert();
+
 -- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
 -- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
 notify pgrst, 'reload schema';

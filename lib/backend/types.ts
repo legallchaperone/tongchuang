@@ -77,6 +77,10 @@ export interface Backend {
   sendSignal(s: Signal): Promise<void>;
   onSignal(me: UserId, cb: (s: Signal) => void): Unsub;
 
+  // v1.11 Web Push: this device's push subscription (only mine; the database moves a device that signs in as someone else)
+  savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string; ua: string }): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+
   // R-020 留言板
   /** the `limit` newest top-level notes (newest first) plus every reply under them; RLS only returns boards of people I share a room with (and my own) */
   listGuestbook(ownerId: UserId, limit: number): Promise<GuestbookEntry[]>;

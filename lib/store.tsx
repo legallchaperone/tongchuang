@@ -6,6 +6,7 @@ import type { AuthUser, DailyReview, Kudos, SessionComment, SubjectFolder, Todo,
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
+import { disablePush, pushOnHere, refreshPush } from "./push";
 
 /** the first screen only needs recent records (today, this week, last week, the 30-day room heat map) */
 const INITIAL_DAYS = 35;
@@ -210,7 +211,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const id = Math.random().toString(36).slice(2);
     setToasts((x) => [...x.slice(-3), { ...t, id }]);
     setTimeout(() => setToasts((x) => x.filter((y) => y.id !== id)), t.ttl ?? 6000);
-    if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") {
+    // with push on for this device the service worker shows the system notification instead (public/sw.js)
+    if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted" && !pushOnHere()) {
       try { new Notification(t.title, { body: t.body, icon: "/icon.svg" }); } catch { /* ignore */ }
     }
   }, []);
@@ -509,6 +511,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; };
   }, [status, me, backend]);
 
+  // v1.11 Web Push: keep this device's subscription fresh (browsers may rotate keys)
+  useEffect(() => {
+    if (status !== "ready" || !me || backend.mode !== "supabase") return;
+    refreshPush(backend);
+  }, [status, me, backend]);
+
   // R-020 留言板: someone left a note on my board → a toast on whatever page I'm on
   useEffect(() => {
     if (status !== "ready" || !me) return;
@@ -678,7 +686,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     async sendSignal(s) { if (me) await backend.sendSignal({ ...s, from: me.id, at: Date.now() } as Signal); },
-    async signOut() { dropSnapshots(); await backend.signOut(); },
+    async signOut() {
+      dropSnapshots();
+      // stop pushes to this device while still signed in (the row is only deletable by its owner)
+      await disablePush(backend).catch(() => { /* offline: the push function drops it once the browser reports it gone */ });
+      await backend.signOut();
+    },
     folders, foldersError,
     async saveFolder(f) {
       const saved = await backend.saveFolder(f);

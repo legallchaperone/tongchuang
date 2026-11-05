@@ -374,6 +374,13 @@ export function createSupabaseBackend(url: string, key: string): Backend {
     },
 
     async sendSignal(s: Signal) {
+      // v1.11: signals are rows in public.signals (only to classmates, rate-limited, pushed to closed pages)
+      const payload = s.kind === "cheer" ? { text: s.text } : s.kind === "invite" ? { mode: s.mode, minutes: s.minutes, task: s.task } : {};
+      const { error } = await sb.from("signals").insert({ to_user: s.to, kind: s.kind, payload });
+      if (!error) return;
+      if (/too many signals/.test(error.message)) throw new Error("发得太频繁了，过一分钟再试");
+      // before the v1.11 migration the table is missing: fall back to the old broadcast so pokes keep working
+      if (!/signals/.test(error.message) || !/(does not exist|schema cache|relation)/i.test(error.message)) throw new Error(error.message);
       let ch = userChannels.get(s.to);
       if (!ch) {
         ch = sb.channel("user:" + s.to);
@@ -383,11 +390,30 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       await ch.send({ type: "broadcast", event: "signal", payload: s });
     },
     onSignal(me, cb) {
-      const ch = sb.channel("user:" + me).on("broadcast", { event: "signal" }, (p: any) => {
-        const s = p.payload as Signal;
-        if (s && s.to === me) cb(s);
-      }).subscribe();
+      const toSignal = (r: any): Signal | null => {
+        const base = { from: r.from_user, to: r.to_user, at: ts(r.created_at) || Date.now() };
+        const p = r.payload || {};
+        if (r.kind === "poke") return { kind: "poke", ...base };
+        if (r.kind === "cheer") return { kind: "cheer", ...base, text: String(p.text || "") };
+        if (r.kind === "invite") return { kind: "invite", ...base, mode: p.mode, minutes: Number(p.minutes) || 25, task: String(p.task || "") };
+        return null;
+      };
+      const ch = sb.channel("signals-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "signals", filter: `to_user=eq.${me}` }, (p: any) => {
+          const s = p.new && toSignal(p.new);
+          if (s && s.to === me) cb(s);
+        })
+        .subscribe();
+      // the old public broadcast channel is no longer listened to: anyone with the anon key could post to it
       return () => { sb.removeChannel(ch); };
+    },
+
+    async savePushSubscription(sub) {
+      const { error } = await sb.rpc("save_push_subscription", { p_endpoint: sub.endpoint, p_p256dh: sub.p256dh, p_auth: sub.auth, p_ua: sub.ua });
+      if (error) throw new Error(/save_push_subscription|schema cache/.test(error.message) ? "推送还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql" : error.message);
+    },
+    async deletePushSubscription(endpoint) {
+      check(await sb.from("push_subscriptions").delete().eq("endpoint", endpoint));
     },
 
     // R-020 留言板
