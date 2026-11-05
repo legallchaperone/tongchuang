@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { applyMix, loadMix, saveMix, SOUNDS, stopAll, type MixState, type SoundId } from "@/lib/sound";
 import { PxIcon } from "./Pixel";
+import { useFocus } from "@/lib/focus";
 
 /** "环境声" button + panel: pick any mix of recordings, each with its own volume, plus a master volume */
 export function SoundMixer({ onChange }: { onChange?: (m: MixState) => void }) {
@@ -9,13 +10,17 @@ export function SoundMixer({ onChange }: { onChange?: (m: MixState) => void }) {
   const [mix, setMix] = useState<MixState>(() => loadMix());
   const [credits, setCredits] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
+  // leaving the focus page mid-focus keeps the sound on; the focus provider stops it once the focus is over
+  const focus = useFocus();
+  const running = useRef(false);
+  running.current = !!focus.state;
 
   // the browser only lets audio start after a click; restore the saved mix on the first one
   useEffect(() => {
     onChange?.(mix);
     const first = () => applyMix(loadMix());
     window.addEventListener("pointerdown", first, { once: true });
-    return () => { window.removeEventListener("pointerdown", first); stopAll(); };
+    return () => { window.removeEventListener("pointerdown", first); if (!running.current) stopAll(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {

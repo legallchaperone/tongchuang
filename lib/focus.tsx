@@ -3,7 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { resolveSubject, useApp } from "./store";
 import type { FocusMode, LiveStatus, UserId } from "./types";
 import { browserTz, MIN } from "./time";
-import { chime } from "./sound";
+import { chime, stopAll } from "./sound";
 import { normMode, prefsOf, rememberCountdownMin, suggestBreakMin } from "./focusModes";
 
 export interface FocusState {
@@ -157,6 +157,14 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
       todoId: s.todoId || null,
     };
   }, [breakMin, pomoMin, prefs]);
+
+  // the ambient sound outlives the focus page while a focus runs; once it is over, silence it unless that page is open
+  const hadState = useRef(false);
+  useEffect(() => {
+    if (state) { hadState.current = true; return; }
+    if (hadState.current && typeof location !== "undefined" && location.pathname !== "/focus") stopAll();
+    hadState.current = false;
+  }, [state]);
 
   // phase completion
   useEffect(() => {

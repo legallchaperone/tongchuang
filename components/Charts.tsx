@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CAKE_COLORS, CAKE_N, cakeRuns } from "@/lib/cake";
 
 /** chart drawing width = container width, so text stays at its real size */
@@ -97,10 +97,13 @@ const LEVELS = [0, 0.5 * HOUR, 1.5 * HOUR, 3 * HOUR, 5 * HOUR];
 const level = (ms: number) => (ms <= 0 ? 0 : LEVELS.filter((l) => ms >= l).length);
 export function Heatmap({ cols, onPickDay }: { cols: { key: string; ms: number; future: boolean }[][]; /** R-021: clicking a day */ onPickDay?: (key: string) => void }) {
   const [hover, setHover] = useState<{ key: string; ms: number; x: number; y: number } | null>(null);
+  // today is on the right edge: when the year does not fit, open scrolled all the way right so "now" is what you see first
+  const wrap = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { const el = wrap.current; if (el) el.scrollLeft = el.scrollWidth; }, [cols.length]);
   const months: { col: number; label: string }[] = [];
   cols.forEach((c, i) => { const d = c[0].key; if (i === 0 || d.slice(5, 7) !== cols[i - 1][0].key.slice(5, 7)) months.push({ col: i, label: Number(d.slice(5, 7)) + "月" }); });
   return (
-    <div className="heatwrap">
+    <div className="heatwrap" ref={wrap}>
       <div className="chart" style={{ minWidth: 680 }} onMouseLeave={() => setHover(null)}>
         <div className="heatgrid">
           <div />
