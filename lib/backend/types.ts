@@ -1,5 +1,7 @@
 import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
+import type { FocusRow, FocusWrite } from "../focusSync";
+
 export type Unsub = () => void;
 
 export interface Backend {
@@ -77,6 +79,11 @@ export interface Backend {
   sendSignal(s: Signal): Promise<void>;
   onSignal(me: UserId, cb: (s: Signal) => void): Unsub;
 
+  // v1.11 R-006 跨设备计时 (only mine). Demo mode throws FOCUS_LOCAL: the timer then stays on this device as before.
+  focusGet(): Promise<{ row: FocusRow; now: number }>;
+  focusWrite(w: FocusWrite): Promise<{ ok: boolean; row: FocusRow; now: number; session: Session | null }>;
+  subscribeFocus(me: UserId, cb: (row: FocusRow) => void): Unsub;
+
   // v1.11 Web Push: this device's push subscription (only mine; the database moves a device that signs in as someone else)
   savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string; ua: string }): Promise<void>;
   deletePushSubscription(endpoint: string): Promise<void>;
@@ -114,3 +121,6 @@ export interface Backend {
   /** its subjects go back to the top level */
   deleteFolder(id: string): Promise<void>;
 }
+
+/** thrown by focusGet() when the timer cannot sync (demo mode, or the database is not migrated yet) */
+export const FOCUS_LOCAL = "FOCUS_LOCAL";

@@ -1,4 +1,5 @@
 import type { Backend } from "./types";
+import type { FocusRow } from "../focusSync";
 import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
@@ -583,6 +584,30 @@ export function createDemoBackend(): Backend {
     },
     async sendSignal(s) { reply(s); },
     onSignal(_me, cb) { sigCbs.add(cb); return () => sigCbs.delete(cb); },
+    // R-006 in the demo: the "server" is localStorage, so tabs of this browser share one timer (same rules as focus_write)
+    async focusGet() { return delay({ row: readFocus(), now: Date.now() }); },
+    async focusWrite(w) {
+      const cur = readFocus();
+      const saved = cur.savedKeys || [];
+      if (w.session && w.pendingKey != null && saved.includes(w.pendingKey)) return delay({ ok: false, row: cur, now: Date.now(), session: null });
+      if (w.expected !== cur.version) return delay({ ok: false, row: cur, now: Date.now(), session: null });
+      let session: Session | null = null;
+      if (w.session) {
+        session = { ...w.session, userId: ME, id: uid() };
+        db.sessions.push(session); save(); emitSession(session, "upsert");
+      }
+      const row: FocusRow = {
+        version: cur.version + 1, holder: w.device, holderLabel: w.label, state: w.state, pending: w.pending, dueAt: w.dueAt, dueInfo: w.dueInfo,
+        savedKeys: w.session && w.pendingKey != null ? [...saved, w.pendingKey].slice(-20) : saved,
+      };
+      try { localStorage.setItem(FOCUS_KEY, JSON.stringify(row)); } catch { /* full */ }
+      return delay({ ok: true, row, now: Date.now(), session });
+    },
+    subscribeFocus(_me, cb) {
+      const on = (e: StorageEvent) => { if (e.key === FOCUS_KEY && e.newValue) { try { cb(JSON.parse(e.newValue)); } catch { /* */ } } };
+      window.addEventListener("storage", on);
+      return () => window.removeEventListener("storage", on);
+    },
     async savePushSubscription() { throw new Error("演示模式不能开启推送：数据只在这个浏览器里，没有服务器可以推送"); },
     async deletePushSubscription() { /* nothing stored */ },
 
@@ -687,6 +712,12 @@ export function createDemoBackend(): Backend {
   };
 }
 
+const FOCUS_KEY = "tc-demo-focus-v1";
+const EMPTY_FOCUS: FocusRow = { version: 0, holder: "", holderLabel: "", state: null, pending: null, dueAt: null, dueInfo: null, savedKeys: [] };
+function readFocus(): FocusRow {
+  try { return JSON.parse(localStorage.getItem(FOCUS_KEY) || "null") || EMPTY_FOCUS; } catch { return EMPTY_FOCUS; }
+}
+
 export function resetDemo() {
-  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(KEY); localStorage.removeItem(FOCUS_KEY); } catch { /* ignore */ }
 }

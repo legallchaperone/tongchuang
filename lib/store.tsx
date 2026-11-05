@@ -7,6 +7,7 @@ import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
 import { disablePush, pushOnHere, refreshPush } from "./push";
+import { serverNow } from "./clock";
 
 /** the first screen only needs recent records (today, this week, last week, the 30-day room heat map) */
 const INITIAL_DAYS = 35;
@@ -112,6 +113,8 @@ interface Ctx {
   joinRoom(code: string): Promise<Room>;
   leaveRoom(id: string): Promise<void>;
   addSession(s: Omit<Session, "id">): Promise<Session>;
+  /** R-006: a record the server saved together with the timer (focus_write); just show it */
+  noteSession(s: Session): void;
   updateSession(id: string, patch: Partial<Pick<Session, "rating" | "note" | "task" | "subjectId" | "durationMs" | "endedAt">>): Promise<void>;
   deleteSession(id: string): Promise<void>;
   setLive(l: LiveStatus): Promise<void>;
@@ -160,8 +163,9 @@ export const useApp = () => {
 
 /** a ticking clock, shared */
 function useNow(ms = 1000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]);
+  // R-006: on the server's clock, so every device draws the same timers
+  const [now, setNow] = useState(() => serverNow());
+  useEffect(() => { const t = setInterval(() => setNow(serverNow()), ms); return () => clearInterval(t); }, [ms]);
   return now;
 }
 
@@ -634,6 +638,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setSessions((l) => [r, ...l.filter((x) => x.id !== r.id)].sort((a, b) => b.startedAt - a.startedAt));
       return r;
     },
+    noteSession(r) { setSessions((l) => [r, ...l.filter((x) => x.id !== r.id)].sort((a, b) => b.startedAt - a.startedAt)); },
     async updateSession(id, patch) {
       const cur = sessions.find((x) => x.id === id);
       if (cur && patch.durationMs != null) {

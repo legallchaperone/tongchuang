@@ -1,5 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
-import type { Backend, Unsub } from "./types";
+import { FOCUS_LOCAL, type Backend, type Unsub } from "./types";
+import type { FocusRow } from "../focusSync";
 import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
@@ -36,6 +37,13 @@ const toKudos = (r: any): Kudos => ({ id: r.id, sessionId: r.session_id, fromUse
 const toReview = (r: any): DailyReview => ({
   userId: r.user_id, day: String(r.day).slice(0, 10), energy: r.energy ?? null, impact: r.impact ?? null, note: r.note || "",
   totalMs: Number(r.total_ms || 0), tz: r.tz || "UTC", createdAt: ts(r.created_at) || 0, updatedAt: ts(r.updated_at) || ts(r.created_at) || 0,
+});
+
+const toFocusRow = (r: any): FocusRow => ({
+  version: Number(r?.version || 0), holder: r?.holder || "", holderLabel: r?.holder_label || "",
+  state: r?.state ?? null, pending: r?.pending ?? null,
+  dueAt: r?.due_at == null ? null : Number(r.due_at), dueInfo: r?.due_info ?? null,
+  savedKeys: Array.isArray(r?.saved_keys) ? r.saved_keys.map(Number) : [],
 });
 
 /** Supabase auth errors in plain Chinese */
@@ -405,6 +413,38 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         })
         .subscribe();
       // the old public broadcast channel is no longer listened to: anyone with the anon key could post to it
+      return () => { sb.removeChannel(ch); };
+    },
+
+    async focusGet() {
+      const { data, error } = await sb.rpc("focus_get");
+      if (error) {
+        // not migrated yet: keep the timer on this device, as before v1.11
+        if (/focus_get|schema cache|does not exist/i.test(error.message)) throw new Error(FOCUS_LOCAL);
+        throw new Error(error.message);
+      }
+      return { row: toFocusRow(data.row), now: Number(data.now) };
+    },
+    async focusWrite(w) {
+      const { data, error } = await sb.rpc("focus_write", {
+        p_expected: w.expected, p_device: w.device, p_label: w.label, p_state: w.state, p_pending: w.pending,
+        p_due_at: iso(w.dueAt), p_due_info: w.dueInfo,
+        p_session: w.session ? {
+          subject_id: w.session.subjectId, task: w.session.task, started_at: Math.round(w.session.startedAt), ended_at: Math.round(w.session.endedAt),
+          duration_ms: Math.round(w.session.durationMs), mode: w.session.mode, rating: w.session.rating, note: w.session.note, tz: w.session.tz, todo_id: w.session.todoId || null,
+        } : null,
+        p_pending_key: w.session ? w.pendingKey ?? null : null,
+      });
+      if (error) throw new Error(error.message);
+      return { ok: !!data.ok, row: toFocusRow(data.row), now: Number(data.now), session: data.session ? toSession(data.session) : null };
+    },
+    subscribeFocus(me, cb) {
+      const ch = sb.channel("focus-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "focus_state", filter: `user_id=eq.${me}` }, (p: any) => {
+          const r = p.new;
+          if (r && r.user_id === me && r.version != null) cb(toFocusRow({ ...r, due_at: ts(r.due_at) }));
+        })
+        .subscribe();
       return () => { sb.removeChannel(ch); };
     },
 

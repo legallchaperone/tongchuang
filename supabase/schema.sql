@@ -539,6 +539,124 @@ create trigger session_comments_push after insert on public.session_comments for
 drop trigger if exists guestbook_push on public.guestbook;
 create trigger guestbook_push after insert on public.guestbook for each row execute function public.push_on_insert();
 
+-- ───────────── v1.11 R-006 跨设备计时 ─────────────
+-- 进行中的专注（state）和等待复盘的那一段（pending）以前只存在各自浏览器里，手机和电脑会各算一份。
+-- 现在每人一行，只有本人能读；只能通过 focus_write() 改，并且要带上次看到的版本号：
+-- 两台设备同时操作时只有一台写得进去，另一台拿到最新状态后照着显示，所以不会重复计时、重复记录。
+-- 保存复盘时，写记录和清掉 pending 在同一个事务里完成。state / pending 的结构见 lib/focus.tsx（FocusState / PendingReflection）。
+-- due_at：当前这一段计划结束的时间，到点后由 pg_cron 推送“时间到了”（页面关着也能收到）。可重复运行。
+create table if not exists public.focus_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  version bigint not null default 0,
+  holder text not null default '' check (char_length(holder) <= 64),
+  holder_label text not null default '' check (char_length(holder_label) <= 40),
+  state jsonb check (state is null or octet_length(state::text) <= 4000),
+  pending jsonb check (pending is null or octet_length(pending::text) <= 4000),
+  due_at timestamptz,
+  due_info jsonb check (due_info is null or octet_length(due_info::text) <= 1000),
+  due_notified_at timestamptz,
+  -- which reflections were saved (their pending.startedAt), so the same one is never saved twice
+  saved_keys bigint[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+alter table public.focus_state enable row level security;
+drop policy if exists "focus read own" on public.focus_state;
+create policy "focus read own" on public.focus_state for select using (user_id = auth.uid());
+-- no insert / update / delete policies: writes only go through focus_write()
+do $$ begin
+  begin alter publication supabase_realtime add table public.focus_state; exception when others then null; end;
+end $$;
+
+create or replace function public.focus_row_json(f public.focus_state)
+returns jsonb language sql stable as $$
+  select jsonb_build_object('version', f.version, 'holder', f.holder, 'holder_label', f.holder_label,
+    'state', f.state, 'pending', f.pending, 'updated_at', f.updated_at,
+    'due_at', (extract(epoch from f.due_at) * 1000)::bigint, 'due_info', f.due_info, 'saved_keys', to_jsonb(f.saved_keys))
+$$;
+
+-- current state plus the server clock (the client uses it to correct its own clock)
+create or replace function public.focus_get()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); f focus_state;
+begin
+  if me is null then raise exception 'not signed in'; end if;
+  insert into focus_state(user_id) values (me) on conflict do nothing;
+  select * into f from focus_state where user_id = me;
+  return jsonb_build_object('row', focus_row_json(f), 'now', (extract(epoch from clock_timestamp()) * 1000)::bigint);
+end $$;
+
+-- compare-and-set: writes only when p_expected is still the current version; otherwise returns the current row.
+-- p_session (optional) is the record to save in the same transaction, e.g. when a reflection is saved;
+-- p_pending_key names which reflection it is: one that was already saved is refused, whatever the version.
+create or replace function public.focus_write(
+  p_expected bigint, p_device text, p_label text, p_state jsonb, p_pending jsonb,
+  p_due_at timestamptz default null, p_due_info jsonb default null, p_session jsonb default null, p_pending_key bigint default null
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  me uuid := auth.uid(); f focus_state; s sessions; subj uuid; todo uuid;
+  now_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+begin
+  if me is null then raise exception 'not signed in'; end if;
+  insert into focus_state(user_id) values (me) on conflict do nothing;
+  select * into f from focus_state where user_id = me for update;
+  if p_session is not null and p_pending_key is not null and p_pending_key = any(f.saved_keys) then
+    return jsonb_build_object('ok', false, 'saved', true, 'row', focus_row_json(f), 'now', now_ms);
+  end if;
+  if f.version <> p_expected then
+    return jsonb_build_object('ok', false, 'row', focus_row_json(f), 'now', now_ms);
+  end if;
+  if p_session is not null then
+    -- the subject or to-do may have been deleted on another device meanwhile: keep the record without the link
+    subj := nullif(p_session->>'subject_id', '')::uuid;
+    if subj is not null and not exists (select 1 from subjects where id = subj and user_id = me) then subj := null; end if;
+    todo := nullif(p_session->>'todo_id', '')::uuid;
+    if todo is not null and not exists (select 1 from todos where id = todo and user_id = me) then todo := null; end if;
+    insert into sessions(user_id, subject_id, task, started_at, ended_at, duration_ms, mode, rating, note, tz, todo_id)
+    values (me, subj, left(coalesce(p_session->>'task', ''), 200),
+      to_timestamp((p_session->>'started_at')::bigint / 1000.0), to_timestamp((p_session->>'ended_at')::bigint / 1000.0),
+      (p_session->>'duration_ms')::bigint, coalesce(p_session->>'mode', 'stopwatch'),
+      nullif(p_session->>'rating', '')::smallint, left(coalesce(p_session->>'note', ''), 500), coalesce(p_session->>'tz', 'UTC'), todo)
+    returning * into s;
+  end if;
+  update focus_state set
+    version = f.version + 1,
+    holder = left(coalesce(p_device, ''), 64), holder_label = left(coalesce(p_label, ''), 40),
+    state = p_state, pending = p_pending,
+    due_at = p_due_at, due_info = p_due_info,
+    due_notified_at = case when p_due_at is not distinct from f.due_at then f.due_notified_at end,
+    -- remember the last 20 saved reflections
+    saved_keys = case when p_session is not null and p_pending_key is not null
+      then (array_append(f.saved_keys, p_pending_key))[greatest(1, coalesce(array_length(f.saved_keys, 1), 0) - 18):]
+      else f.saved_keys end,
+    updated_at = now()
+  where user_id = me returning * into f;
+  return jsonb_build_object('ok', true, 'row', focus_row_json(f), 'now', now_ms,
+    'session', case when s.id is null then null else to_jsonb(s) end);
+end $$;
+
+-- every minute: tell people whose timed block just ended (only once per block; skips anything over 30 minutes late)
+create or replace function public.focus_due_tick()
+returns integer language plpgsql security definer set search_path = public as $$
+declare r record; n integer := 0;
+begin
+  for r in
+    select user_id, due_info from focus_state
+    where due_at is not null and due_at <= now() and due_at > now() - interval '30 minutes' and due_notified_at is null
+    for update skip locked
+  loop
+    update focus_state set due_notified_at = now() where user_id = r.user_id;
+    perform push_notify(jsonb_build_object('type', 'focus_due', 'record', coalesce(r.due_info, '{}'::jsonb) || jsonb_build_object('user_id', r.user_id)));
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke execute on function public.focus_due_tick() from public, anon, authenticated;
+
+do $$ begin
+  begin create extension if not exists pg_cron; exception when others then null; end;
+  begin perform cron.schedule('tongchuang-focus-due', '* * * * *', 'select public.focus_due_tick()'); exception when others then null; end;
+end $$;
+
 -- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
 -- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
 notify pgrst, 'reload schema';

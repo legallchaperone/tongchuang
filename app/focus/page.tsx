@@ -147,6 +147,12 @@ function Focus() {
               <div className="card timerplate">
                 <div>
                   <div className="phase">{phaseLabel}</div>
+                  {/* R-006: the same timer on every device */}
+                  {(focus.sync.elsewhere || focus.sync.status === "offline") && (
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {focus.sync.status === "offline" ? "离线中 · 联网后会同步到其他设备" : `在${focus.sync.elsewhere}上开始 · 在这里也可以继续`}
+                    </div>
+                  )}
                   {editable ? (
                     <TimerClock text={clockText} minutes={Math.round(planned / 60000)} onAdjust={(d) => focus.adjust(d)} onSet={(m) => focus.setMinutes(m)} />
                   ) : (
