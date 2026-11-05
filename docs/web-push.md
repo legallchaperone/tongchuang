@@ -32,7 +32,7 @@ node scripts/vapid-keys.mjs
 
 ### 2. 数据库
 
-1. Supabase → **Database → Extensions**，搜索 `pg_net` 并打开。
+1. Supabase → **Database → Extensions**，搜索并打开 `pg_net`（发推送用）和 `pg_cron`（番茄钟到点提醒用）。打开后要再执行一遍 `supabase/schema.sql`，它会注册每分钟一次的到点检查。
 2. 在 **SQL Editor** 里重新执行一遍 `supabase/schema.sql`（合并到 main 后，GitHub Actions 的 db-migrate 也会自动执行）。
 3. 在 SQL Editor 里执行第 1 步打印的最后一段 `insert into public.push_config ...`。把里面的 `<project-ref>` 换成你的项目编号（项目网址 `https://<project-ref>.supabase.co` 中间那一段）。
 
