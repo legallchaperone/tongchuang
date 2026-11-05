@@ -1,6 +1,7 @@
 # Runs supabase/schema.sql against the production database whenever it changes on main
 # (the script is idempotent, so running it again is harmless). Can also be started by hand.
 # Needs the repository secret SUPABASE_DB_URL: the Session pooler connection string (URI) with the password filled in.
+# The user part looks like postgres.<project-ref>; a password with @ # / ? : % must be URL-encoded (or use letters and digits).
 name: db-migrate
 
 on:
