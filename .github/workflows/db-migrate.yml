@@ -1,0 +1,47 @@
+# Runs supabase/schema.sql against the production database whenever it changes on main
+# (the script is idempotent, so running it again is harmless). Can also be started by hand.
+# Needs the repository secret SUPABASE_DB_URL: the Session pooler connection string (URI) with the password filled in.
+name: db-migrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - supabase/schema.sql
+      - .github/workflows/db-migrate.yml
+  workflow_dispatch:
+
+# never two migrations at once
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secret is set
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Repository secret SUPABASE_DB_URL is missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      - name: Install psql
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          psql --version
+
+      - name: Run supabase/schema.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        # one transaction: if any statement fails, nothing is applied
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -q -f supabase/schema.sql
