@@ -1175,3 +1175,45 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .td-est-lbl { font-size: 12px; margin-left: 4px; }
 .td-custom { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
 .td-custom .input { width: 64px; height: 32px; text-align: center; }
+
+/* 开始专注：模式标签 → 选任务 → 表盘 → ▶ ⚙ */
+.start2 { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 4px 0 6px; }
+.mtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(420px, 100%); }
+.mtab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 8px; border: 2px solid var(--edge); background: var(--panel); color: var(--ink-2); clip-path: var(--notch); white-space: nowrap; }
+.mtab:hover { filter: brightness(1.05); color: var(--ink); }
+.mtab[aria-checked="true"] { background: var(--lamp-soft); color: var(--ink); box-shadow: inset 0 -4px 0 var(--lamp); }
+.mtab.m-pomodoro .pxi { color: #d4553c; }
+.mtab.m-stopwatch .pxi { color: #d99a14; }
+.mtab.m-countdown .pxi { color: #3f7d9c; }
+.taskpick { display: flex; justify-content: center; max-width: 100%; }
+.taskbtn { gap: 8px; height: 38px; padding: 0 16px; }
+.taskchip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 38px; padding: 4px 14px; border: 2px solid var(--edge); background: var(--panel-2); color: var(--ink); clip-path: var(--notch); cursor: pointer; }
+.taskchip:hover { background: var(--lamp-soft); }
+.taskchip b { font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.taskchip .subj { flex: none; }
+.taskchip small { flex: none; font-size: 12px; }
+.tpick { width: min(480px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 10px; background: var(--panel-2); box-shadow: 0 0 0 2px var(--edge); animation: pop .2s steps(3); }
+.tpick .input { width: 100%; height: 40px; }
+.tp-lbl { color: var(--ink-3); font-size: 12px; margin-bottom: 4px; }
+.tp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; }
+.tp-list button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 6px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tp-list button:hover { background: var(--lamp-soft); }
+.tp-list li + li { border-top: 2px dashed var(--slot); }
+.tp-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dial { position: relative; width: 200px; height: 200px; }
+.dial svg { display: block; width: 100%; height: 100%; }
+.dial .d-edge { fill: var(--edge); }
+.dial .d-in { fill: var(--panel-2); }
+.dial.m-pomodoro .d-ring { fill: #e07a5f; }
+.dial.m-stopwatch .d-ring { fill: #e9b949; }
+.dial.m-countdown .d-ring { fill: #6aa6c4; }
+.dial-t { position: absolute; inset: 0; display: grid; place-items: center; font-size: 44px; line-height: 1; color: var(--ink); }
+.dialctl { display: flex; align-items: center; gap: 12px; }
+.playbtn { display: grid; place-items: center; width: 56px; height: 56px; border: 2px solid var(--edge); background: var(--grass); color: #fff; clip-path: var(--notch); box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2); cursor: pointer; }
+.playbtn .pxi { width: 24px; height: 24px; }
+.playbtn:hover { filter: brightness(1.08); }
+.playbtn:active { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .2); transform: translateY(2px); }
+.gearbtn { width: 36px; height: 36px; }
+.gearbtn.on { background: var(--lamp-soft); }
+.dialopts { display: flex; justify-content: center; }
+@media (max-width: 480px) { .dial { width: 170px; height: 170px; } .dial-t { font-size: 36px; } .mtab { font-size: 13px; gap: 4px; } }

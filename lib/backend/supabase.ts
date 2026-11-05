@@ -525,6 +525,10 @@ function todoError(e: { message: string; code?: string }): Error {
   const m = e.message || "";
   if (e.code === "42P01" || e.code === "PGRST205" || (/todos/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TODO_MISSING);
   if (e.code === "23503") return new Error("这个科目已经不在了，换一个吧");
+  // estimate became optional (v1.8.2) and free (v1.8.3); an older table refuses both until schema.sql is run again
+  if (/estimate_min/.test(m) && (e.code === "23502" || e.code === "23514" || /not-null|check constraint/i.test(m))) {
+    return new Error("数据库还没更新：请在 Supabase 的 SQL Editor 里重新执行一遍 supabase/schema.sql，之后预估时间就可以不填或自己填了");
+  }
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }

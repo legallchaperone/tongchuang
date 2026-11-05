@@ -119,7 +119,7 @@ export default function TodayPage() {
               </div>
             ) : (
               <>
-                <div className="cardhead"><h2>开始专注</h2><span className="hint">回车直接开始 · 结束后写一句复盘</span></div>
+                <div className="cardhead"><h2>开始专注</h2></div>
                 <div className="cardbody"><StartPanel pick={pick} /></div>
               </>
             )}
