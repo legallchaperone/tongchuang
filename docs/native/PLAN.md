@@ -1,6 +1,6 @@
 # 同窗 Mac 原生 App 实现计划（零成本版）
 
-> 状态：**v0.3** · 2026-11-05 · 配套图：同窗原生版 System Design Map（artifact）
+> 状态：**v0.4** · 2026-11-05（阶段 0a、0b 已实现，见分支 `feat/phase-0`；Mac 地基见分支 `native/mac-foundation`） · 配套图：同窗原生版 System Design Map（artifact）
 > 方向：**不付 Apple 开发者年费**。做 Mac 原生 App，从 GitHub Releases 免费发给朋友；iPhone 上的朋友继续用网页版（PWA），并加上 Web Push 推送。
 > 以后想做 iPhone 原生版（灵动岛、小组件、App Store），再开通 99 美元的账号，按 v0.2 的 iOS 部分补上，见第 9 节。
 
@@ -38,7 +38,7 @@
 | D2 | 构建与发布 | 代码放仓库 `native/`；打 tag 后由 **GitHub Actions macOS 构建机**编译、本机签名、打包 zip，上传到 Releases | 仓库是公开的，Actions 免费；你不用自己手动打包 |
 | D3 | 业务逻辑 | 纯函数移植成 Swift，先剥离 localStorage 和 DOM 副作用，用 TS 生成的 JSON 样本对拍 | 同 v0.2 |
 | D4 | 像素美术 | 数据抽成 JSON；半透明叠加预先算成不透明颜色；金样逐像素零差异 | 同 v0.2 |
-| D5 | 计时状态 | **服务器裁决**：`focus_transition()` + 版本号 + 数据库时间 + pg_cron 到点 | 网页、Mac、手机网页三端同时在线，仍然必需 |
+| D5 | 计时状态 | **服务器用版本号仲裁**：`focus_write()` 比较写入 + 复盘编号去重 + 统一用服务器时间 + pg_cron 到点推送；阶段推进仍由客户端计算 | 三端同时在线时不重复计时、不重复记录；不用在 SQL 里再写一遍番茄钟规则 |
 | D6 | 通知 | Mac：Realtime + 本地通知；iPhone 网页：**Web Push**（VAPID，Edge Function 发送）；戳一下改为写进 `signals` 表 | 都免费；`signals` 同时修掉可伪造的问题 |
 | D7 | 登录 | 密码登录（现在就能用）+ 魔法链接走自定义 URL scheme `tongchuang://auth`；R-014 做完后加验证码 | 自定义 URL scheme 不需要付费账号，也就不再依赖 R-014 |
 | D8 | 大陆访问 | Supabase 地址可配置，默认走 Cloudflare 代理 | 同网页 |
@@ -72,17 +72,19 @@
 GitHub：tag → Actions（macOS）→ Releases（zip + Sparkle appcast）
 ```
 
-### 3.1 计时的数据模型（D5）
+### 3.1 计时的数据模型（D5，已实现）
 
-和 v0.2 相同，这是三端同步的地基：
+实现时比 v0.3 的设计更小：服务器不重写计时规则，只负责“谁的写入算数”。
 
-- `live_status` 补列：`version`、`subject_id`、`pomos_done`、`focus_min`、`overtime`、`with_user`。
-- 私有部分放 `focus_private`（只有本人能读）：`holder_device`、`todo_id`、待复盘记录。原因是 “live read” 策略让同窗能读 `live_status` 整行（`supabase/schema.sql:188`），而待办是私有数据。
-- 所有操作走 `focus_transition(action, expected_version, device_id, payload)`：时间用数据库的 `now()`；版本号做乐观锁；结束时在同一个事务里写 `sessions`，保证只有一条记录。
-- pg_cron 每分钟处理已到点的专注，并触发 Web Push（“时间到了，休息 5 分钟”）。
-- 离线时操作先排队，重连后重放，冲突以服务器为准。
-- 网页要改的地方：`lib/focus.tsx:160-185` 不再由客户端推进阶段；`lib/store.tsx:378-380` 不再以本机为准；`lib/backend/supabase.ts:257-262` 的无条件 upsert 换成 RPC。
-- 老用户：localStorage 里有进行中的专注时，第一次打开就交给服务器接管（`adopt`）。
+- **`focus_state`**（每人一行，只有本人能读，只能通过函数写）：`version`、`holder`（最后写入的设备）、`state`（`lib/focus.tsx` 的 `FocusState`）、`pending`（待复盘）、`due_at` / `due_info`（到点推送用）、`saved_keys`（最近 20 个已保存复盘的编号）。待办等私有数据只在这里，不进同窗能读的 `live_status`。
+- **`focus_write(expected, device, …, session, pending_key)`**：版本号不对就拒绝，并返回当前状态，客户端照着显示；带 `session` 时，在同一个事务里写记录并清掉待复盘；同一个复盘编号第二次提交，不管版本号对不对都会被拒绝。
+- **阶段推进**（到点转休息、加时）仍在客户端计算。几台设备同时推进时，只有第一台写得进去，其余几台改用它的结果。
+- **时钟**：每次请求都带回服务器时间，`lib/clock.ts` 估算本机与服务器的时钟差，全站的“现在”和写入的时间戳都按服务器时间算。
+- **离线**：计时照常在本机显示；写入失败会以 2 到 60 秒的间隔重试。保存的复盘先放进本机的待发队列（`tc-focus-outbox-v1`），刷新页面也不会丢，联网后再发。
+- **到点推送**：pg_cron 每分钟扫描一次 `due_at`，每一段只推一次，晚了 30 分钟以上就不推。
+- **live_status**：由最后操作的那台设备负责更新，只是同步展示的设备不写。
+- **老用户**：升级前就在跑的计时，第一次打开时如果服务器上还是空的，就自动上传。
+- **Mac 版（TCFocus）** 要移植的就是 `lib/focusSync.ts` 这套规则（约 300 行），以及 `lib/focus.tsx` 里的阶段推进。
 
 ### 3.2 Mac App 的结构（`native/`）
 
@@ -252,6 +254,10 @@ xattr -dr com.apple.quarantine /Applications/同窗.app
 ---
 
 ## 审阅记录
+
+### v0.4（2026-11-05）· 阶段 0a、0b 实现完成
+- D5 改为“版本号仲裁 + 客户端推进阶段”，见 3.1；比原设计少一个服务器端状态机，Mac 版移植量也更小。
+- 已实现并测试：signals、Web Push（`docs/web-push.md`）、R-006 跨设备计时；Mac 地基（TCCore 对拍、TCPixel 逐像素一致、App 能编译）。
 
 ### v0.3（2026-11-05）· 改为零成本 Mac 原生
 - 不付开发者年费：去掉 iOS 原生、APNs、Live Activity、TestFlight、上架、ICP 备案。
