@@ -1,0 +1,156 @@
+# Builds the 同窗 Mac app on a free GitHub macOS runner (the repository is public):
+# swift test (golden fixtures) -> xcodegen -> universal Release build, ad-hoc signed -> zip artifact.
+# No Apple Developer account and no secrets are needed. See docs/native/RELEASING.md.
+name: mac
+
+on:
+  push:
+    branches: ["native/**", main]
+    paths:
+      - "native/**"
+      - "design/**"
+      - ".github/workflows/mac.yml"
+    # Releases: uncomment together with the `release` job below, then push a tag like mac-v0.1.0
+    # tags: ["mac-v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: mac-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Test TongchuangKit (logic + pixel goldens)
+        working-directory: native/Packages/TongchuangKit
+        run: swift test 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
+
+      - name: Generate the Xcode project
+        working-directory: native
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodegen generate
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/mac-v* ]]; then
+            v="${GITHUB_REF_NAME#mac-v}"
+          else
+            v="$(grep -E '^\s+MARKETING_VERSION:' native/project.yml | head -1 | awk '{print $2}')"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "zip=Tongchuang-$v-${GITHUB_SHA::7}.zip" >> "$GITHUB_OUTPUT"
+          echo "version $v"
+
+      - name: Build (Release, arm64 + x86_64, ad-hoc signed)
+        working-directory: native
+        run: |
+          xcodebuild \
+            -project Tongchuang.xcodeproj \
+            -scheme Tongchuang \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            MARKETING_VERSION="${{ steps.version.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            build > "$RUNNER_TEMP/xcodebuild.log" 2>&1 && status=0 || status=$?
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -80 || true
+          tail -n 15 "$RUNNER_TEMP/xcodebuild.log"
+          exit $status
+
+      - name: Check the app
+        working-directory: native/build/Build/Products/Release
+        run: |
+          ls -la
+          app="同窗.app"
+          exe="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")"
+          lipo -archs "$exe"
+          lipo -archs "$exe" | grep -q arm64
+          lipo -archs "$exe" | grep -q x86_64
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E "Identifier|Signature|Format"
+          /usr/libexec/PlistBuddy -c 'Print CFBundleURLTypes' "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist"
+
+      - name: Zip
+        run: |
+          ditto -c -k --keepParent "native/build/Build/Products/Release/同窗.app" "${{ steps.version.outputs.zip }}"
+          ls -la "${{ steps.version.outputs.zip }}"
+
+      # compiler errors as annotations, readable on the run page without opening the log
+      - name: Report compiler errors
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP/swift-test.log" "$RUNNER_TEMP/xcodebuild.log"; do
+            [ -f "$f" ] || continue
+            grep -E "^/.*:[0-9]+:[0-9]+: error: " "$f" | sort -u | head -20 \
+              | sed -E "s#^$GITHUB_WORKSPACE/##; s#^([^:]+):([0-9]+):([0-9]+): error: (.*)#::error file=\1,line=\2,col=\3::\4#" || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tongchuang-macOS
+          path: ${{ steps.version.outputs.zip }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            ${{ runner.temp }}/swift-test.log
+            ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── Releases (ready to enable) ──────────────────────────────────────────────
+  # 1. uncomment `tags: ["mac-v*"]` under `on.push` above and this job
+  # 2. git tag mac-v0.1.0 && git push origin mac-v0.1.0
+  # The zip is attached to a GitHub Release using the built-in GITHUB_TOKEN (no secret to add).
+  # Sparkle auto-update is not set up yet: it needs an EdDSA key pair whose private half is a
+  # repository secret only the owner can add (see docs/native/RELEASING.md).
+  #
+  # release:
+  #   needs: build
+  #   if: startsWith(github.ref, 'refs/tags/mac-v')
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: Tongchuang-macOS
+  #     - name: Create the release
+  #       env:
+  #         GH_TOKEN: ${{ github.token }}
+  #       run: |
+  #         v="${GITHUB_REF_NAME#mac-v}"
+  #         cat > notes.md <<'EOF'
+  #         下载下面的 zip，解压后把「同窗」拖进「应用程序」。
+  #         第一次打开会被系统拦下：到「系统设置 → 隐私与安全性」，拉到下面点「仍要打开」。
+  #         熟悉终端也可以运行：xattr -dr com.apple.quarantine /Applications/同窗.app
+  #         EOF
+  #         gh release create "$GITHUB_REF_NAME" Tongchuang-*.zip \
+  #           --repo "$GITHUB_REPOSITORY" --title "同窗 Mac $v" --notes-file notes.md

@@ -1,0 +1,73 @@
+# XcodeGen spec for the 同窗 Mac app. The .xcodeproj is generated, never committed:
+#   brew install xcodegen && cd native && xcodegen
+name: Tongchuang
+options:
+  bundleIdPrefix: world.cwx
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    # Apple silicon + Intel
+    ARCHS: "$(ARCHS_STANDARD)"
+    # no paid Apple account: ad-hoc signature ("Sign to Run Locally"), no team, no hardened runtime
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+
+packages:
+  TongchuangKit:
+    path: Packages/TongchuangKit
+
+targets:
+  Tongchuang:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: TongchuangKit
+        product: TCCore
+      - package: TongchuangKit
+        product: TCPixel
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: 同窗
+        CFBundleDisplayName: 同窗
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: 同窗 · 一起自习
+        # tongchuang://auth is where the magic-link sign-in will land (PLAN D7)
+        CFBundleURLTypes:
+          - CFBundleURLName: world.cwx.tongchuang
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes:
+              - tongchuang
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: world.cwx.tongchuang
+        PRODUCT_NAME: 同窗
+        PRODUCT_MODULE_NAME: Tongchuang
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
+
+schemes:
+  Tongchuang:
+    build:
+      targets:
+        Tongchuang: all
+    run:
+      config: Debug
+    archive:
+      config: Release
