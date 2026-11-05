@@ -568,7 +568,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     backend, status, error, me, myProfile: me ? profiles[me.id] || null : null, profiles, peopleIds, subjects, rooms, sessions, live, kudos, online, toasts, now,
     pushToast, dismissToast, reload, ensureHistory, historyLoading: historyBusy > 0,
     async saveProfile(p) { await backend.saveProfile(p); setProfiles((m) => ({ ...m, [p.id]: p })); },
-    async saveSubject(s) { const r = await backend.saveSubject(s); setSubjects((l) => [...l.filter((x) => x.id !== r.id), r]); return r; },
+    // an edited subject keeps its place in the list (renaming or recoloring used to move it to the end)
+    async saveSubject(s) { const r = await backend.saveSubject(s); setSubjects((l) => (l.some((x) => x.id === r.id) ? l.map((x) => (x.id === r.id ? r : x)) : [...l, r])); return r; },
     async ensureSubject(name) {
       if (!me) throw new Error("未登录");
       const key = subjectKey(name);

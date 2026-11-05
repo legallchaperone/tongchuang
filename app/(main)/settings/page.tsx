@@ -24,6 +24,17 @@ export default function SettingsPage() {
   const [notif, setNotif] = useState<string>("default");
   const [subjSheet, setSubjSheet] = useState<{ s: Subject; kind: "merge" | "delete" } | null>(null);
   const [newSubj, setNewSubj] = useState("");
+  /** the subject being renamed, and the name typed so far */
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  async function rename(s: Subject) {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    if (!name || name === s.name) { setRenaming(null); return; }
+    const twin = mine.find((x) => x.id !== s.id && x.name.trim().toLowerCase() === name.toLowerCase());
+    if (twin) { app.pushToast({ title: `已经有「${twin.name}」了`, body: "想把两个算在一起，可以用“合并到…”" }); return; }
+    try { await app.saveSubject({ ...s, name }); setRenaming(null); }
+    catch (err) { app.pushToast({ title: "没能改名", body: (err as Error).message }); }
+  }
   useEffect(() => { if ("Notification" in window) setNotif(Notification.permission); }, []);
   const dirty = JSON.stringify(p) !== JSON.stringify(app.myProfile);
   const fp = prefsOf(p);
@@ -125,13 +136,23 @@ export default function SettingsPage() {
         {mine.map((s) => (
           <div key={s.id} className="subj-row">
             <span className="dot" style={{ background: seriesVar(s.color), width: 10, height: 10 }} />
-            <span className="subj-row-name" style={{ color: s.archived ? "var(--ink-3)" : undefined }}>{s.name}{s.archived && "（已归档）"}</span>
-            <span className="subj-row-acts">
+            {renaming?.id === s.id ? (
+              <form className="subj-rename" onSubmit={(e) => { e.preventDefault(); rename(s); }}>
+                <input className="input" autoFocus aria-label={`「${s.name}」的新名字`} maxLength={40} value={renaming.name}
+                  onChange={(e) => setRenaming({ id: s.id, name: e.target.value })} onKeyDown={(e) => { if (e.key === "Escape") setRenaming(null); }} />
+                <button className="btn sm primary" type="submit" disabled={!renaming.name.trim()}>保存</button>
+                <button className="btn sm ghost" type="button" onClick={() => setRenaming(null)}>取消</button>
+              </form>
+            ) : (
+              <span className="subj-row-name" style={{ color: s.archived ? "var(--ink-3)" : undefined }}>{s.name}{s.archived && "（已归档）"}</span>
+            )}
+            {renaming?.id !== s.id && <span className="subj-row-acts">
+              <button className="btn sm ghost" onClick={() => setRenaming({ id: s.id, name: s.name })}>改名</button>
               <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, color: (s.color + 1) % 8 })}>换色</button>
               <button className="btn sm ghost" onClick={() => app.saveSubject({ ...s, archived: !s.archived })}>{s.archived ? "恢复" : "归档"}</button>
               {mine.length > 1 && <button className="btn sm ghost" onClick={() => setSubjSheet({ s, kind: "merge" })}>合并到…</button>}
               <button className="btn sm ghost subj-del" onClick={() => setSubjSheet({ s, kind: "delete" })}>删除</button>
-            </span>
+            </span>}
           </div>
         ))}
         <form className="subj-add" onSubmit={async (e) => {
