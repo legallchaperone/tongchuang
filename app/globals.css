@@ -1173,3 +1173,5 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .td-done-toggle:hover { color: var(--ink); }
 .td-done .td-list { margin-top: 4px; }
 .td-est-lbl { font-size: 12px; margin-left: 4px; }
+.td-custom { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.td-custom .input { width: 64px; height: 32px; text-align: center; }

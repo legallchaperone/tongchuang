@@ -7,7 +7,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import type { Todo } from "@/lib/types";
 import { dur } from "@/lib/time";
-import { checkTodo, estLabel, TODO_ESTIMATES, TODO_MAX } from "@/lib/todos";
+import { checkTodo, estLabel, TODO_EST_MAX, TODO_ESTIMATES, TODO_MAX } from "@/lib/todos";
 import { seriesVar } from "./bits";
 import { IPlay, ITrash } from "./Icons";
 
@@ -146,6 +146,8 @@ function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
   const [text, setText] = useState(initial?.text || "");
   const [subjectId, setSubjectId] = useState<string | null>(initial ? initial.subjectId : lastSubject(app.todos, mine.map((s) => s.id)));
   const [est, setEst] = useState<number | null>(initial ? initial.estimateMin : null);
+  /** the typed minutes; shown while the estimate is not one of the quick picks */
+  const [custom, setCustom] = useState(initial?.estimateMin && !(TODO_ESTIMATES as readonly number[]).includes(initial.estimateMin) ? String(initial.estimateMin) : "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -179,9 +181,19 @@ function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
         <div className="seg td-est-seg" role="group" aria-label="预估时间（可不选）">
           {TODO_ESTIMATES.map((m) => (
             // optional: tap the picked one again to leave it unestimated
-            <button key={m} type="button" aria-pressed={est === m} onClick={() => setEst(est === m ? null : m)}>{estLabel(m)}</button>
+            <button key={m} type="button" aria-pressed={est === m} onClick={() => { setEst(est === m ? null : m); setCustom(""); }}>{estLabel(m)}</button>
           ))}
         </div>
+        <span className="td-custom">
+          <input className="input num" inputMode="numeric" value={custom} placeholder="自己填" aria-label="预估时间（分钟）"
+            onChange={(e) => {
+              let v = e.target.value.replace(/[^0-9]/g, "").replace(/^0+/, "").slice(0, 3);
+              if (Number(v) > TODO_EST_MAX) v = String(TODO_EST_MAX);
+              setCustom(v);
+              setEst(v ? Number(v) : null);
+            }} />
+          <span className="muted">分</span>
+        </span>
       </div>
       {(err || len > TODO_MAX) && <p className="td-err" role="alert">{err || `最多 ${TODO_MAX} 个字`}</p>}
     </form>

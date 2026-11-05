@@ -77,7 +77,7 @@ export function StartPanel({ dark = false, initial, pick }: {
     if (!pick) return;
     const t = pick.todo;
     // the mode stays whatever was picked; an estimate only pre-fills the countdown length
-    setTask(t.text); setSubjectId(t.subjectId); if (t.estimateMin) setCdMin(t.estimateMin); setLinked(t);
+    setTask(t.text); setSubjectId(t.subjectId); if (t.estimateMin) setCdMin(Math.min(300, t.estimateMin)); setLinked(t);
     const el = document.getElementById("start-task") as HTMLInputElement | null;
     el?.focus(); el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [pick]);
