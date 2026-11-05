@@ -7,10 +7,13 @@ import React, { useMemo, useRef, useState } from "react";
 import { useApp } from "@/lib/store";
 import type { Todo } from "@/lib/types";
 import { dur } from "@/lib/time";
-import { checkTodo, estLabel, TODO_DEFAULT_EST, TODO_ESTIMATES, TODO_MAX } from "@/lib/todos";
+import { checkTodo, estLabel, TODO_ESTIMATES, TODO_MAX } from "@/lib/todos";
 import { seriesVar } from "./bits";
 import { IPlay, ITrash } from "./Icons";
 
+const estOf = (ts: Todo[]) => ts.reduce((a, t) => a + (t.estimateMin || 0), 0);
+/** " · 约 45 分" / " · 约 2.5 小时" / "" when nothing is estimated */
+const totalTxt = (min: number) => (min ? ` · ${fmtTotal(min)}` : "");
 /** "约 45 分" / "约 2.5 小时" */
 function fmtTotal(min: number) {
   if (min < 60) return `约 ${min} 分`;
@@ -41,7 +44,7 @@ export function TodoCard({ onPick, busy }: { onPick: (t: Todo) => void; /** a fo
     const order = [...mine.map((s) => s.id), "none"];
     return order.filter((k) => by.has(k)).map((k) => ({ key: k, subject: mine.find((s) => s.id === k) || null, items: by.get(k)! }));
   }, [open, mine]);
-  const totalMin = open.reduce((a, t) => a + t.estimateMin, 0);
+  const totalMin = estOf(open);
 
   async function act(f: () => Promise<unknown>, fail: string) {
     try { await f(); } catch (e) { app.pushToast({ title: fail, body: (e as Error).message }); }
@@ -57,7 +60,7 @@ export function TodoCard({ onPick, busy }: { onPick: (t: Todo) => void; /** a fo
   }
   return (
     <section className="card todo-card" style={{ order: 3 }} aria-label="待办">
-      <div className="cardhead"><h2>待办</h2>{open.length > 0 && <span className="hint num">{open.length} 项 · {fmtTotal(totalMin)}</span>}</div>
+      <div className="cardhead"><h2>待办</h2>{open.length > 0 && <span className="hint num">{open.length} 项{totalTxt(totalMin)}</span>}</div>
       <div className="cardbody td-body">
         {/* keyed on loading so the subject defaults to the last one used once the list is in */}
         <TodoEditor key={app.todos ? "new" : "loading"} submitLabel="添加" onSubmit={(v) => app.addTodo(v).then(() => undefined)} />
@@ -68,7 +71,7 @@ export function TodoCard({ onPick, busy }: { onPick: (t: Todo) => void; /** a fo
                 <h3 className="td-ghead">
                   <span className="dot" style={{ background: g.subject ? seriesVar(g.subject.color) : "var(--ink-3)" }} />
                   <span className="td-gname">{g.subject?.name || "未分类"}</span>
-                  <span className="muted num">{g.items.length} 项 · {fmtTotal(g.items.reduce((a, t) => a + t.estimateMin, 0))}</span>
+                  <span className="muted num">{g.items.length} 项{totalTxt(estOf(g.items))}</span>
                 </h3>
                 <ul className="td-list">
                   {g.items.map((t) => editing === t.id ? (
@@ -112,7 +115,7 @@ function TodoRow({ t, used, busy, onDone, onEdit, onPick, onDelete }: {
   t: Todo; used: number; busy: boolean; onDone: () => void; onEdit?: () => void; onPick?: () => void; onDelete: () => void;
 }) {
   const isDone = !!t.doneAt;
-  const over = used > t.estimateMin * 60_000;
+  const over = !!t.estimateMin && used > t.estimateMin * 60_000;
   return (
     <li className={`td-item${isDone ? " done" : ""}`}>
       <button type="button" className={`td-check${isDone ? " on" : ""}`} role="checkbox" aria-checked={isDone}
@@ -122,7 +125,7 @@ function TodoRow({ t, used, busy, onDone, onEdit, onPick, onDelete }: {
           ? <button type="button" className="td-text" onClick={onEdit} title="点一下修改">{t.text}</button>
           : <span className="td-text">{t.text}</span>}
         <span className="td-meta">
-          <span className="td-est">{estLabel(t.estimateMin)}</span>
+          {t.estimateMin && <span className="td-est">{estLabel(t.estimateMin)}</span>}
           {used > 0 && <span className={`num${over ? " td-over" : ""}`}>已用 {dur(used)}</span>}
         </span>
       </div>
@@ -136,13 +139,13 @@ function TodoRow({ t, used, busy, onDone, onEdit, onPick, onDelete }: {
 
 /** add a to-do, or edit one: text, subject, estimate */
 function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
-  initial?: Todo; submitLabel: string; onSubmit: (v: { text: string; subjectId: string | null; estimateMin: number }) => Promise<void>; onCancel?: () => void;
+  initial?: Todo; submitLabel: string; onSubmit: (v: { text: string; subjectId: string | null; estimateMin: number | null }) => Promise<void>; onCancel?: () => void;
 }) {
   const app = useApp();
   const mine = app.subjects.filter((s) => s.userId === app.me?.id && (!s.archived || s.id === initial?.subjectId));
   const [text, setText] = useState(initial?.text || "");
   const [subjectId, setSubjectId] = useState<string | null>(initial ? initial.subjectId : lastSubject(app.todos, mine.map((s) => s.id)));
-  const [est, setEst] = useState(initial?.estimateMin || TODO_DEFAULT_EST);
+  const [est, setEst] = useState<number | null>(initial ? initial.estimateMin : null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -172,9 +175,11 @@ function TodoEditor({ initial, submitLabel, onSubmit, onCancel }: {
           <option value="">未分类</option>
           {mine.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <div className="seg td-est-seg" role="radiogroup" aria-label="预估时间">
+        <span className="muted td-est-lbl">预估</span>
+        <div className="seg td-est-seg" role="group" aria-label="预估时间（可不选）">
           {TODO_ESTIMATES.map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={est === m} aria-pressed={est === m} onClick={() => setEst(m)}>{estLabel(m)}</button>
+            // optional: tap the picked one again to leave it unestimated
+            <button key={m} type="button" aria-pressed={est === m} onClick={() => setEst(est === m ? null : m)}>{estLabel(m)}</button>
           ))}
         </div>
       </div>

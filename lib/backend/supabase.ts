@@ -518,7 +518,7 @@ function commentError(e: { message: string; code?: string }): Error {
   return new Error(m);
 }
 const toTodo = (r: any): Todo => ({
-  id: r.id, userId: r.user_id, text: r.text || "", subjectId: r.subject_id || null, estimateMin: Number(r.estimate_min) || 25,
+  id: r.id, userId: r.user_id, text: r.text || "", subjectId: r.subject_id || null, estimateMin: r.estimate_min == null ? null : Number(r.estimate_min),
   doneAt: ts(r.done_at), createdAt: ts(r.created_at) || 0,
 });
 function todoError(e: { message: string; code?: string }): Error {

@@ -178,8 +178,8 @@ export interface Todo {
   userId: UserId;
   text: string;
   subjectId: string | null;
-  /** one of TODO_ESTIMATES (minutes) */
-  estimateMin: number;
+  /** one of TODO_ESTIMATES (minutes), or null = not estimated */
+  estimateMin: number | null;
   /** null = not done yet */
   doneAt: number | null;
   createdAt: number;

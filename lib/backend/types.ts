@@ -100,7 +100,7 @@ export interface Backend {
 
   // R-025 待办 (only mine; nobody else can read them)
   listTodos(): Promise<Todo[]>;
-  addTodo(t: { text: string; subjectId: string | null; estimateMin: number }): Promise<Todo>;
+  addTodo(t: { text: string; subjectId: string | null; estimateMin: number | null }): Promise<Todo>;
   updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
   deleteTodo(id: string): Promise<void>;
 }

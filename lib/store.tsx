@@ -129,7 +129,7 @@ interface Ctx {
   /** R-025: my to-dos (private); null while loading, and stays null if the table is missing */
   todos: Todo[] | null;
   todosError: string | null;
-  addTodo(t: { text: string; subjectId: string | null; estimateMin: number }): Promise<Todo>;
+  addTodo(t: { text: string; subjectId: string | null; estimateMin: number | null }): Promise<Todo>;
   updateTodo(id: string, patch: Partial<Pick<Todo, "text" | "subjectId" | "estimateMin" | "doneAt">>): Promise<void>;
   deleteTodo(id: string): Promise<void>;
 }

@@ -2,7 +2,6 @@
 export const TODO_MAX = 80;
 /** the only estimates offered (minutes) */
 export const TODO_ESTIMATES = [15, 25, 45, 60, 120] as const;
-export const TODO_DEFAULT_EST = 25;
 /** the error a backend throws while the todos table does not exist yet (schema.sql not re-run) */
 export const TODO_MISSING = "待办还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql";
 /** "15 分" / "1 小时" / "2 小时" */

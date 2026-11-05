@@ -379,11 +379,14 @@ create table if not exists public.todos (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   text text not null check (char_length(btrim(text)) between 1 and 80),
   subject_id uuid references public.subjects(id) on delete set null,
-  estimate_min integer not null default 25 check (estimate_min in (15, 25, 45, 60, 120)),
+  estimate_min integer check (estimate_min in (15, 25, 45, 60, 120)), -- null = 没估
   done_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index if not exists todos_user_idx on public.todos(user_id, created_at);
+-- v1.8.2：预估时间改成可选（v1.8.0 建的表里它还是必填）
+alter table public.todos alter column estimate_min drop not null;
+alter table public.todos alter column estimate_min drop default;
 alter table public.todos enable row level security;
 drop policy if exists "todos own" on public.todos;
 create policy "todos own" on public.todos for all using (user_id = auth.uid()) with check (user_id = auth.uid());

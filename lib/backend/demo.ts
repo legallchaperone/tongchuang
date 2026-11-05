@@ -273,17 +273,17 @@ function seedTodos(db: DB): Todo[] {
   const mine = db.subjects.filter((x) => x.userId === ME);
   const sub = (i: number) => mine[i % Math.max(1, mine.length)]?.id ?? null;
   const now = Date.now();
-  const t = (text: string, subjectId: string | null, estimateMin: number, hoursAgo: number, done = false): Todo =>
+  const t = (text: string, subjectId: string | null, estimateMin: number | null, hoursAgo: number, done = false): Todo =>
     ({ id: uid(), userId: ME, text, subjectId, estimateMin, doneAt: done ? now - hoursAgo * HOUR / 2 : null, createdAt: now - hoursAgo * HOUR });
   return [
     t("读完 3 篇相关工作", sub(1), 120, 30),
     t("改实验图的配色", sub(1), 45, 20),
     t("第 4 章习题 1–20", sub(0), 60, 26),
-    t("整理错题本", sub(0), 25, 8),
+    t("整理错题本", sub(0), null, 8),
     t("精读一篇外刊", sub(2), 45, 12),
     t("背 50 个单词", sub(2), 15, 3),
     t("把爬虫的 bug 修掉", sub(3), 60, 40, true),
-    t("给导师发周报", null, 15, 5),
+    t("给导师发周报", null, null, 5),
   ];
 }
 
@@ -650,7 +650,7 @@ export function createDemoBackend(): Backend {
       if (!t) return;
       if ("text" in patch) { const { text, error } = checkTodo(patch.text || ""); if (error) throw new Error(error); t.text = text; }
       if ("subjectId" in patch) t.subjectId = patch.subjectId ?? null;
-      if ("estimateMin" in patch) t.estimateMin = patch.estimateMin!;
+      if ("estimateMin" in patch) t.estimateMin = patch.estimateMin ?? null;
       if ("doneAt" in patch) t.doneAt = patch.doneAt ?? null;
       save();
     },

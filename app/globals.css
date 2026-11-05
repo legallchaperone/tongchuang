@@ -1172,3 +1172,4 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .td-done-toggle { background: none; border: 0; padding: 0; font: inherit; color: var(--ink-3); cursor: pointer; }
 .td-done-toggle:hover { color: var(--ink); }
 .td-done .td-list { margin-top: 4px; }
+.td-est-lbl { font-size: 12px; margin-left: 4px; }
