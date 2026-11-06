@@ -61,3 +61,18 @@ export function lastCountdownMin(): number {
 export function rememberCountdownMin(m: number) {
   try { localStorage.setItem(CD_KEY, String(Math.round(m))); } catch { /* */ }
 }
+
+/** a focus (or pause, or break) left open this long was forgotten: it is cancelled, and nobody is shown it */
+export const DANGLING_MS = 8 * 60 * MIN;
+
+/** a classmate's live status that has been running or paused for 8 hours: their device never ended it */
+export function liveDangling(l: LiveStatus, now: number): boolean {
+  if (l.state === "idle") return false;
+  if (l.runningSince) return l.accumulatedMs + Math.max(0, now - l.runningSince) >= DANGLING_MS || (l.state === "break" && now - l.runningSince >= DANGLING_MS);
+  return now - l.updatedAt >= DANGLING_MS;
+}
+
+/** the same status shown as not studying (the personal status stays) */
+export function liveIdle(l: LiveStatus): LiveStatus {
+  return { ...l, state: "idle", task: "", subjectName: "", subjectColor: null, mode: "stopwatch", startedAt: null, plannedEnd: null, accumulatedMs: 0, runningSince: null };
+}

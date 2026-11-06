@@ -6,6 +6,7 @@ import type { AuthUser, DailyReview, Kudos, SessionComment, SubjectFolder, Todo,
 import { addDaysKey, browserTz, DAY, dayKey } from "./time";
 import { activeStatus, readStatusPrefs, statusPatch } from "./status";
 import { byDay, streaks } from "./stats";
+import { liveDangling, liveIdle } from "./focusModes";
 
 /** the first screen only needs recent records (today, this week, last week, the 30-day room heat map) */
 const INITIAL_DAYS = 35;
@@ -581,8 +582,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const reload = useCallback(async () => { if (me) await load(me, status === "ready"); }, [me, load, status]);
 
+  // a timer left running for 8 hours (its device never ended it) shows as not studying
+  const minute = Math.floor(now / 60000);
+  const shownLive = useMemo(() => {
+    const t = minute * 60000;
+    if (!Object.values(live).some((l) => liveDangling(l, t))) return live;
+    return Object.fromEntries(Object.entries(live).map(([k, l]) => [k, liveDangling(l, t) ? liveIdle(l) : l]));
+  }, [live, minute]);
+
   const value: Ctx = {
-    backend, status, error, me, myProfile: me ? profiles[me.id] || null : null, profiles, peopleIds, subjects, rooms, sessions, live, kudos, online, toasts, now,
+    backend, status, error, me, myProfile: me ? profiles[me.id] || null : null, profiles, peopleIds, subjects, rooms, sessions, live: shownLive, kudos, online, toasts, now,
     pushToast, dismissToast, reload, ensureHistory, historyLoading: historyBusy > 0,
     async saveProfile(p) { await backend.saveProfile(p); setProfiles((m) => ({ ...m, [p.id]: p })); },
     // an edited subject keeps its place in the list (renaming or recoloring used to move it to the end)

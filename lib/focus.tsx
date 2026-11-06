@@ -4,7 +4,7 @@ import { resolveSubject, useApp } from "./store";
 import type { FocusMode, LiveStatus, UserId } from "./types";
 import { browserTz, MIN } from "./time";
 import { chime, stopAll } from "./sound";
-import { normMode, prefsOf, rememberCountdownMin, suggestBreakMin } from "./focusModes";
+import { DANGLING_MS, normMode, prefsOf, rememberCountdownMin, suggestBreakMin } from "./focusModes";
 
 export interface FocusState {
   phase: "focus" | "break" | "breakDone";
@@ -25,6 +25,8 @@ export interface FocusState {
   overtime?: boolean;
   /** R-025: started from this to-do */
   todoId?: string | null;
+  /** when it was paused (absent in old saved states) */
+  pausedAt?: number;
 }
 
 export interface PendingReflection {
@@ -166,6 +168,18 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
     hadState.current = false;
   }, [state]);
 
+  // left open for 8 hours (running, paused or on a break): it was forgotten, so cancel it without a record
+  useEffect(() => {
+    if (!state || state.phase === "breakDone") return;
+    // a running timer with an end (countdown, pomodoro, break) finishes on its own, recorded as planned
+    if (state.runningSince && state.plannedMs && !state.overtime) return;
+    const stale = state.runningSince ? elapsed >= DANGLING_MS : app.now - (state.pausedAt ?? state.startedAt) >= DANGLING_MS;
+    if (!stale) return;
+    setState(null);
+    if (state.phase === "focus") app.pushToast({ title: "专注超过 8 小时没结束，已自动取消", body: "这次没有记下来" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, elapsed]);
+
   // phase completion
   useEffect(() => {
     if (!state || !state.plannedMs || !state.runningSince) return;
@@ -226,7 +240,7 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
     start({ mode, minutes, task, subjectId, withUser, todoId }) {
       setState(focusBlock({ mode: normMode(mode), minutes, task, subjectId, withUser, todoId, pomosDone: state?.pomosDone || 0 }));
     },
-    pause() { if (state?.runningSince) setState({ ...state, accumulatedMs: elapsedOf(state), runningSince: null }); },
+    pause() { if (state?.runningSince) setState({ ...state, accumulatedMs: elapsedOf(state), runningSince: null, pausedAt: Date.now() }); },
     resume() { if (state && !state.runningSince && state.phase !== "breakDone") setState({ ...state, runningSince: Date.now() }); },
     finish() {
       if (!state) return;
