@@ -11,6 +11,7 @@ import { DeskScene, PxIcon } from "@/components/Pixel";
 import { StartPanel } from "@/components/StartPanel";
 import { IBack, IExpand, IPause, IPlay, IStop } from "@/components/Icons";
 import { SoundMixer } from "@/components/SoundMixer";
+import { LEVELS } from "@/components/Overlays";
 import { liveFocusMs, todayMs as todayFocusMs } from "@/lib/stats";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity } from "@/lib/time";
 import type { FocusMode } from "@/lib/types";
@@ -85,6 +86,7 @@ function Focus() {
   const router = useRouter();
   const q = useSearchParams();
   const [rain, setRain] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   // keep the screen awake while a timer runs
   useEffect(() => {
@@ -182,10 +184,25 @@ function Focus() {
                   {s.runningSince
                     ? <button className="fbtn" onClick={() => focus.pause()}><IPause /> 暂停</button>
                     : <button className="fbtn main" onClick={() => focus.resume()}><IPlay /> 继续</button>}
+                  <button className="fbtn" aria-expanded={reviewing} onClick={() => setReviewing(!reviewing)}>{s.draftRating || s.draftNote?.trim() ? "✓ 评价" : "✎ 写评价"}</button>
                   <button className={`fbtn${over ? " main" : ""}`} onClick={() => focus.finish()}><IStop /> {over ? "结束，去休息" : "结束并记录"}</button>
                 </>
               )}
             </div>
+            {reviewing && s.phase === "focus" && (
+              <div className="card draftreview">
+                <div className="rating" role="group" aria-label="专注度">
+                  {LEVELS.map((l, i) => (
+                    <button key={l} aria-pressed={s.draftRating === i + 1} onClick={() => focus.setDraft({ rating: s.draftRating === i + 1 ? null : i + 1 })}>
+                      <span className="bars">{[0, 1, 2, 3, 4].map((j) => <i key={j} className={j <= i ? "on" : ""} style={{ height: 4 + j * 3 }} />)}</span>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                <textarea className="textarea" aria-label="一句话记录（同窗能看到）" maxLength={280} placeholder="学到了什么？卡在哪里？结束时会带上" value={s.draftNote || ""} onChange={(e) => focus.setDraft({ note: e.target.value })} />
+                <button className="btn sm" onClick={() => setReviewing(false)}>收起</button>
+              </div>
+            )}
           </>
         )}
       </div>

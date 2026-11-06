@@ -408,6 +408,9 @@ input[type="range"] { accent-color: var(--btn); width: 100%; }
 .focus-task { font-size: 24px; line-height: 30px; max-width: 560px; overflow-wrap: anywhere; }
 .focus-task small { display: block; font-size: 12px; line-height: 20px; opacity: .7; margin-top: 4px; }
 .fbtns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.draftreview { width: min(520px, 100%); display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: left; }
+.draftreview .textarea { min-height: 64px; }
+.draftreview > .btn { align-self: flex-end; }
 .fbtn { height: 44px; min-width: 120px; padding: 0 16px; border: 2px solid #120b07; background: #f8e6bd; color: #3a2016; display: inline-flex; align-items: center; justify-content: center; gap: 8px; clip-path: var(--notch); box-shadow: inset 0 -4px 0 #e0c088, inset 0 2px 0 #fff8; font-size: 12px; }
 .fbtn.main { background: #6fae54; color: #fff8e6; box-shadow: inset 0 -4px 0 #3f7a35, inset 0 2px 0 #9bd27a; }
 .fbtn:hover { filter: brightness(1.08); }

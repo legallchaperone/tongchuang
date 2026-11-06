@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
-![version](https://img.shields.io/badge/version-1.10.3-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.10.4-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)

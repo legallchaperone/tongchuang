@@ -30,7 +30,7 @@ export function Toasts() {
   );
 }
 
-const LEVELS = ["很散", "一般", "还行", "专注", "心流"];
+export const LEVELS = ["很散", "一般", "还行", "专注", "心流"];
 
 export function ReflectionSheet() {
   const app = useApp();
@@ -47,7 +47,7 @@ export function ReflectionSheet() {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    if (p) { setRating(null); setNote(""); setTask(p.task); setSubjectId(p.subjectId); setMins(Math.max(1, Math.floor(p.durationMs / 60000))); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
+    if (p) { setRating(p.rating ?? null); setNote(p.note || ""); setTask(p.task); setSubjectId(p.subjectId); setMins(Math.max(1, Math.floor(p.durationMs / 60000))); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
   }, [p]);
 
   const mine = useMemo(() => app.subjects.filter((s) => s.userId === app.me?.id && !s.archived), [app.subjects, app.me]);
