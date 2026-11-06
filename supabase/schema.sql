@@ -190,8 +190,10 @@ drop policy if exists "live write own" on public.live_status;
 create policy "live write own" on public.live_status for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 drop policy if exists "kudos read" on public.kudos;
+-- 像朋友圈：记录主人看得到所有点赞；别人只看得到自己同窗（共同自习室的人）点的
 create policy "kudos read" on public.kudos for select using (
-  exists (select 1 from sessions s where s.id = session_id and public.shares_room(auth.uid(), s.user_id))
+  exists (select 1 from sessions s where s.id = session_id and public.shares_room(auth.uid(), s.user_id)
+    and (s.user_id = auth.uid() or public.shares_room(auth.uid(), from_user)))
 );
 drop policy if exists "kudos give" on public.kudos;
 create policy "kudos give" on public.kudos for insert with check (
@@ -343,7 +345,7 @@ create policy "guestbook write" on public.guestbook for insert with check (
 
 -- ───────────── R-024 自习记录评论 ─────────────
 -- 动态里每条专注记录下面可以评论（≤ 100 字）。owner_id 是记录的主人，冗余存一份，方便按人读取和实时推送。
--- 同自习室的人能看能评；评论的人和记录主人能删；不能修改。记录删掉，评论一起没。可重复运行。
+-- 同自习室的人能评；别人写的评论只有记录主人和写评论的人的同窗看得到；评论的人和记录主人能删；不能修改。记录删掉，评论一起没。可重复运行。
 create table if not exists public.session_comments (
   id uuid primary key default gen_random_uuid(),
   session_id uuid not null references public.sessions(id) on delete cascade,
@@ -357,7 +359,10 @@ create index if not exists session_comments_owner_idx on public.session_comments
 
 alter table public.session_comments enable row level security;
 drop policy if exists "comments read" on public.session_comments;
-create policy "comments read" on public.session_comments for select using (public.shares_room(auth.uid(), owner_id));
+-- 像朋友圈：记录主人看得到所有评论；别人只看得到自己同窗（共同自习室的人）写的
+create policy "comments read" on public.session_comments for select using (
+  public.shares_room(auth.uid(), owner_id) and (owner_id = auth.uid() or public.shares_room(auth.uid(), author_id))
+);
 drop policy if exists "comments write" on public.session_comments;
 create policy "comments write" on public.session_comments for insert with check (
   author_id = auth.uid() and public.shares_room(auth.uid(), owner_id)
