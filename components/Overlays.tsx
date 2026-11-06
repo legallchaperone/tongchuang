@@ -47,7 +47,7 @@ export function ReflectionSheet() {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    if (p) { setRating(p.rating ?? null); setNote(p.note || ""); setTask(p.task); setSubjectId(p.subjectId); setMins(Math.max(1, Math.floor(p.durationMs / 60000))); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
+    if (p) { setRating(null); setNote(p.note || ""); setTask(p.task); setSubjectId(p.subjectId); setMins(Math.max(1, Math.floor(p.durationMs / 60000))); setShown(false); const t = setTimeout(() => setShown(true), 80); return () => clearTimeout(t); }
   }, [p]);
 
   const mine = useMemo(() => app.subjects.filter((s) => s.userId === app.me?.id && !s.archived), [app.subjects, app.me]);

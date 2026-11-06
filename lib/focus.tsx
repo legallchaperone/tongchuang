@@ -27,9 +27,8 @@ export interface FocusState {
   todoId?: string | null;
   /** when it was paused (absent in old saved states) */
   pausedAt?: number;
-  /** rating and note written while it still runs; they fill the reflection sheet */
-  draftRating?: number | null;
-  draftNote?: string;
+  /** notes sent while it still runs; together they fill the reflection sheet's note */
+  notes?: { at: number; text: string }[];
 }
 
 export interface PendingReflection {
@@ -47,8 +46,7 @@ export interface PendingReflection {
   pomosDone?: number;
   /** R-025 */
   todoId?: string | null;
-  /** written during the focus */
-  rating?: number | null;
+  /** notes sent during the focus */
   note?: string;
 }
 
@@ -74,11 +72,14 @@ interface FocusCtx {
   saveReflection(r: { rating: number | null; note: string; task: string; subjectId: string | null; durationMs?: number; then?: NextStep }): Promise<void>;
   dropReflection(): void;
   setTask(task: string, subjectId: string | null): void;
-  /** write the rating / note before the focus ends */
-  setDraft(d: { rating?: number | null; note?: string }): void;
+  /** send a note before the focus ends (false when it does not fit) */
+  addNote(text: string): boolean;
+  removeNote(at: number): void;
 }
 
 const KEY = "tc-focus-v1";
+/** the record's note box holds this many characters */
+export const NOTE_MAX = 280;
 const PKEY = "tc-focus-pending-v1";
 const Ctx = createContext<FocusCtx | null>(null);
 export const useFocus = () => {
@@ -165,7 +166,7 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
       focusMin: s.focusMin || (s.plannedMs ? Math.round(s.plannedMs / MIN) : pomo ? pomoMin : undefined),
       pomosDone: s.pomosDone + (pomo && (completed || s.overtime) ? 1 : 0),
       todoId: s.todoId || null,
-      rating: s.draftRating ?? null, note: s.draftNote || "",
+      note: (s.notes || []).map((n) => n.text).join("\n"),
     };
   }, [breakMin, pomoMin, prefs]);
 
@@ -296,7 +297,15 @@ export function FocusProvider({ children }: { children: React.ReactNode }) {
     },
     dropReflection() { setPending(null); },
     // a different task is no longer the to-do it was started from
-    setDraft(d) { setState((s) => s && s.phase === "focus" ? { ...s, ...("rating" in d ? { draftRating: d.rating } : {}), ...("note" in d ? { draftNote: d.note } : {}) } : s); },
+    addNote(text) {
+      const t = text.trim();
+      if (!t || !state || state.phase !== "focus") return false;
+      const notes = state.notes || [];
+      if ([...notes.map((n) => n.text), t].join("\n").length > NOTE_MAX) return false;
+      setState({ ...state, notes: [...notes, { at: Date.now(), text: t }] });
+      return true;
+    },
+    removeNote(at) { setState((s) => s && { ...s, notes: (s.notes || []).filter((n) => n.at !== at) }); },
     setTask(task, subjectId) { setState((s) => s && { ...s, task, subjectId, todoId: task === s.task ? s.todoId : null }); },
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

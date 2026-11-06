@@ -4,14 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { livePrefix, STAR_MS } from "@/lib/focusModes";
 import { useApp } from "@/lib/store";
-import { useFocus } from "@/lib/focus";
+import { NOTE_MAX, useFocus } from "@/lib/focus";
 import { useAuthGate } from "@/components/Shell";
 import { Spinner, seriesVar } from "@/components/bits";
 import { DeskScene, PxIcon } from "@/components/Pixel";
 import { StartPanel } from "@/components/StartPanel";
 import { IBack, IExpand, IPause, IPlay, IStop } from "@/components/Icons";
 import { SoundMixer } from "@/components/SoundMixer";
-import { LEVELS } from "@/components/Overlays";
 import { liveFocusMs, todayMs as todayFocusMs } from "@/lib/stats";
 import { clock, dayKey, dur, hhmm, partsIn, phaseAt, tzCity } from "@/lib/time";
 import type { FocusMode } from "@/lib/types";
@@ -87,6 +86,7 @@ function Focus() {
   const q = useSearchParams();
   const [rain, setRain] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [noteText, setNoteText] = useState("");
 
   // keep the screen awake while a timer runs
   useEffect(() => {
@@ -184,23 +184,25 @@ function Focus() {
                   {s.runningSince
                     ? <button className="fbtn" onClick={() => focus.pause()}><IPause /> 暂停</button>
                     : <button className="fbtn main" onClick={() => focus.resume()}><IPlay /> 继续</button>}
-                  <button className="fbtn" aria-expanded={reviewing} onClick={() => setReviewing(!reviewing)}>{s.draftRating || s.draftNote?.trim() ? "✓ 评价" : "✎ 写评价"}</button>
+                  <button className="fbtn" aria-expanded={reviewing} onClick={() => setReviewing(!reviewing)}>✎ 笔记{s.notes?.length ? ` ${s.notes.length}` : ""}</button>
                   <button className={`fbtn${over ? " main" : ""}`} onClick={() => focus.finish()}><IStop /> {over ? "结束，去休息" : "结束并记录"}</button>
                 </>
               )}
             </div>
             {reviewing && s.phase === "focus" && (
               <div className="card draftreview">
-                <div className="rating" role="group" aria-label="专注度">
-                  {LEVELS.map((l, i) => (
-                    <button key={l} aria-pressed={s.draftRating === i + 1} onClick={() => focus.setDraft({ rating: s.draftRating === i + 1 ? null : i + 1 })}>
-                      <span className="bars">{[0, 1, 2, 3, 4].map((j) => <i key={j} className={j <= i ? "on" : ""} style={{ height: 4 + j * 3 }} />)}</span>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-                <textarea className="textarea" aria-label="一句话记录（同窗能看到）" maxLength={280} placeholder="学到了什么？卡在哪里？结束时会带上" value={s.draftNote || ""} onChange={(e) => focus.setDraft({ note: e.target.value })} />
-                <button className="btn sm" onClick={() => setReviewing(false)}>收起</button>
+                {!!s.notes?.length && (
+                  <ul className="dn-list">
+                    {s.notes.map((n) => (
+                      <li key={n.at}><span className="muted num">{hhmm(n.at, prof.tz)}</span><span>{n.text}</span><button className="iconbtn" aria-label="删掉这条" onClick={() => focus.removeNote(n.at)}>×</button></li>
+                    ))}
+                  </ul>
+                )}
+                <form className="dn-send" onSubmit={(e) => { e.preventDefault(); if (focus.addNote(noteText)) setNoteText(""); else if (noteText.trim()) app.pushToast({ title: "笔记写满了", body: `一次专注最多 ${NOTE_MAX} 字` }); }}>
+                  <input className="input" aria-label="笔记（结束时带进记录，同窗能看到）" placeholder="学到了什么？卡在哪里？" maxLength={NOTE_MAX} value={noteText} onChange={(e) => setNoteText(e.target.value)} autoFocus />
+                  <button className="btn primary" disabled={!noteText.trim()}>发送</button>
+                </form>
+                <small className="muted">结束时会带进这次的记录</small>
               </div>
             )}
           </>
