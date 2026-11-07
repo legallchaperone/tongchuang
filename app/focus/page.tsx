@@ -87,6 +87,8 @@ function Focus() {
   const [rain, setRain] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [naming, setNaming] = useState(false);
+  const [nameText, setNameText] = useState("");
 
   // keep the screen awake while a timer runs
   useEffect(() => {
@@ -162,7 +164,18 @@ function Focus() {
             </div>
             {over && <div className="overtime-note" role="status">时间到了，准备好再休息</div>}
             <div className="focus-task">
-              {s.phase === "breakDone" ? "休息好了吗？" : s.phase === "break" ? "站起来走走，喝口水" : s.task || "专注"}
+              {s.phase === "breakDone" ? "休息好了吗？" : s.phase === "break" ? "站起来走走，喝口水" : naming ? (
+                <form onSubmit={(e) => { e.preventDefault(); focus.setTask(nameText.trim(), s.subjectId); setNaming(false); }}>
+                  <input className="input taskname" aria-label="任务名称" autoFocus maxLength={80} value={nameText} placeholder="这段时间在做什么？"
+                    onChange={(e) => setNameText(e.target.value)}
+                    onBlur={() => { focus.setTask(nameText.trim(), s.subjectId); setNaming(false); }}
+                    onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setNaming(false); } }} />
+                </form>
+              ) : (
+                <button type="button" className="taskname-btn" title="给任务命名" onClick={() => { setNameText(s.task); setNaming(true); }}>
+                  {s.task || "专注"} <span className="muted" aria-hidden="true">✎</span>
+                </button>
+              )}
               <small>
                 {s.phase === "break" || s.phase === "breakDone" ? (s.mode === "pomodoro" ? `已完成 ${s.pomosDone} 个番茄 · 今天共 ${dur(todayMs)}` : `今天共 ${dur(todayMs)}`) : subj ? <><span className="dot" style={{ background: seriesVar(subj.color), marginRight: 6 }} />{subj.name}</> : "未分类"}
               </small>

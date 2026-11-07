@@ -150,7 +150,7 @@ export function StartPanel({ dark = false, initial, pick }: {
       </div>
       {picking && (
         <TaskPicker task={task} subjectId={subjectId} mine={mine} todos={todos} recent={recent}
-          onSubject={setSubjectId} onChoose={choose} onClose={() => setPicking(false)} />
+          onSubject={setSubjectId} onType={setTask} onChoose={choose} onClose={() => { setPicking(false); setTimeout(() => playRef.current?.focus(), 0); }} />
       )}
 
       <Dial mode={mode} text={face(planned)} />
@@ -171,14 +171,13 @@ export function StartPanel({ dark = false, initial, pick }: {
   );
 }
 
-/** what to focus on: type it, or take one of my to-dos or recent tasks; the subject chips set the subject */
-function TaskPicker({ task, subjectId, mine, todos, recent, onSubject, onChoose, onClose }: {
+/** what to focus on: type it (it is the task as you type, no Enter needed), or take one of my to-dos or recent tasks; the subject chips set the subject */
+function TaskPicker({ task, subjectId, mine, todos, recent, onSubject, onType, onChoose, onClose }: {
   task: string; subjectId: string | null; mine: { id: string; name: string; color: number }[]; todos: Todo[];
   recent: { task: string; subjectId: string | null }[];
-  onSubject: (id: string | null) => void; onChoose: (text: string, sid: string | null, todo?: Todo | null) => void; onClose: () => void;
+  onSubject: (id: string | null) => void; onType: (text: string) => void; onChoose: (text: string, sid: string | null, todo?: Todo | null) => void; onClose: () => void;
 }) {
   const app = useApp();
-  const [draft, setDraft] = useState(task);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   async function addSubject() {
@@ -191,9 +190,9 @@ function TaskPicker({ task, subjectId, mine, todos, recent, onSubject, onChoose,
   const sname = (id: string | null) => mine.find((x) => x.id === id);
   return (
     <div className="tpick" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
-      <form onSubmit={(e) => { e.preventDefault(); onChoose(draft.trim(), subjectId); }}>
-        <input className="input" id="start-task" autoFocus value={draft} maxLength={80} placeholder="直接写要做什么，回车确定"
-          onChange={(e) => setDraft(e.target.value)} />
+      <form onSubmit={(e) => { e.preventDefault(); onClose(); }}>
+        <input className="input" id="start-task" autoFocus value={task} maxLength={80} placeholder="直接写要做什么，例如：线代 第 4 章习题"
+          onChange={(e) => onType(e.target.value)} />
       </form>
       <div className="chips" role="group" aria-label="科目">
         {mine.map((s) => (

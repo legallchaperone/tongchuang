@@ -407,6 +407,9 @@ input[type="range"] { accent-color: var(--btn); width: 100%; }
 .timerplate .phase { color: var(--ink-3); }
 .focus-task { font-size: 24px; line-height: 30px; max-width: 560px; overflow-wrap: anywhere; }
 .focus-task small { display: block; font-size: 12px; line-height: 20px; opacity: .7; margin-top: 4px; }
+.focus-task .taskname-btn { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: text; overflow-wrap: anywhere; }
+.focus-task .taskname-btn .muted { font-size: 16px; }
+.focus-task .taskname { width: min(420px, 90vw); height: 40px; font-size: 18px; text-align: center; }
 .fbtns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .draftreview { color: var(--ink); width: min(520px, 100%); display: flex; flex-direction: column; gap: 10px; align-items: stretch; text-align: left; }
 .dn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
