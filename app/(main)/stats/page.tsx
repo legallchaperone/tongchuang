@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { HISTORY_DAYS, useApp } from "@/lib/store";
-import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, summarize, touching, withLive, yearGrid } from "@/lib/stats";
+import { byDay, dailyBySubject, dayShares, hourProfile, streaks, subjectTotals, summarize, touching, weekRange, withLive, yearGrid } from "@/lib/stats";
 import { addDaysKey, dayKey, dur, durShort, hhmm, hrs, lastDays, MIN, weekdayCn, weekdayOfKey } from "@/lib/time";
 import { DailyBars, foldSlices, HBars, Heatmap, HourChart, PixelDonut } from "@/components/Charts";
 import { Avatar, seriesVar } from "@/components/bits";
@@ -30,6 +30,8 @@ export default function StatsPage() {
   /** 记录明细 filter: "all", "none" (no subject) or a subject id */
   const [subjF, setSubjF] = useState("all");
   useEffect(() => { setSubjF("all"); }, [who]);
+  /** 科目分布: today, this week (from local Monday) or the range picked at the top */
+  const [subjScope, setSubjScope] = useState<"today" | "week" | "range">("range");
   const [picked, setPicked] = useState<string | null>(null); // R-021: a day clicked in the bars or the heat map
   const p = app.profiles[who] || app.myProfile!;
   const tz = p.tz;
@@ -61,6 +63,22 @@ export default function StatsPage() {
   const grid = useMemo(() => yearGrid(daily, tz, 53, now), [daily, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
   const subj = useMemo(() => subjectTotals(inRange, subjects), [inRange, subjects]);
   const hours = useMemo(() => hourProfile(inRange, tz), [inRange, tz]);
+  const todayKey = dayKey(now, tz);
+  const weekKeys = weekRange(tz, now);
+  // today / this week split records that cross midnight by day, like the daily bars
+  const subjSlices = useMemo(() => {
+    const src = subjScope === "range"
+      ? subj.map((x) => [x.id, x.ms] as const)
+      : (() => {
+          const m = new Map<string | null, number>();
+          dailyBySubject(all, tz, subjScope === "today" ? [todayKey] : weekKeys).forEach((r) => r.parts.forEach((v, k) => m.set(k, (m.get(k) || 0) + v)));
+          return Array.from(m).filter(([, ms]) => ms > 0).sort((a, b) => b[1] - a[1]);
+        })();
+    return src.map(([id, ms]) => {
+      const sub = subjects.find((x) => x.id === id);
+      return { key: String(id), name: sub?.name || "未分类", label: sub?.name || "未分类", ms, color: sub ? seriesVar(sub.color) : "var(--ink-3)" };
+    });
+  }, [subjScope, subj, all, tz, todayKey, weekKeys.join(), subjects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // insights
   const insights = useMemo(() => {
@@ -160,9 +178,16 @@ export default function StatsPage() {
 
       <div className="grid-2">
         <section className="card">
-          <div className="cardhead"><h2>科目分布</h2></div>
+          <div className="cardhead"><h2>科目分布</h2>
+            <div className="seg" role="group" aria-label="科目分布的时间范围">
+              {([["today", "今天"], ["week", "本周"], ["range", range === 365 ? "一年" : `${range} 天`]] as const).map(([k, l]) => (
+                <button key={k} aria-pressed={subjScope === k} onClick={() => setSubjScope(k)}>{l}</button>
+              ))}
+            </div>
+          </div>
           <div className="cardbody">
-            {subj.length ? <PixelDonut items={foldSlices(subj.map((x) => ({ key: String(x.id), name: x.subject?.name || "未分类", label: x.subject?.name || "未分类", ms: x.ms, color: x.subject ? seriesVar(x.subject.color) : "var(--ink-3)" })))} /> : <p className="muted">暂无数据</p>}
+            {subjSlices.length ? <PixelDonut items={foldSlices(subjSlices)} /> : <p className="muted">{subjScope === "today" ? "今天还没有记录" : subjScope === "week" ? "本周还没有记录" : "暂无数据"}</p>}
+            {subjScope === "week" && subjSlices.length > 0 && <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>从{isMe ? "你" : p.name}当地的周一算起</p>}
           </div>
         </section>
         <section className="card">
