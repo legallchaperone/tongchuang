@@ -7,12 +7,26 @@ export function liveFocusMs(l: LiveStatus | undefined, now = Date.now()) {
   return l.accumulatedMs + (l.state === "focus" && l.runningSince ? Math.max(0, now - l.runningSince) : 0);
 }
 
-/** sessions + the running one as a pseudo session */
-export function withLive(sessions: Session[], userId: UserId, l: LiveStatus | undefined, tz: string, now = Date.now()): Session[] {
+/**
+ * The subject of someone's running focus. The live status only carries the subject's name and color,
+ * so look it up among that person's subjects (a live one before an archived one, the same color first).
+ */
+export function liveSubjectId(l: LiveStatus | undefined, userId: UserId, subjects: Subject[]): string | null {
+  if (!l?.subjectName) return null;
+  const named = subjects.filter((x) => x.userId === userId && x.name === l.subjectName);
+  const rank = (x: Subject) => (x.archived ? 2 : 0) + (l.subjectColor != null && x.color !== l.subjectColor ? 1 : 0);
+  return named.sort((a, b) => rank(a) - rank(b))[0]?.id ?? null;
+}
+
+/**
+ * sessions + the running one as a pseudo session. Pass `subjects` wherever the result is split by subject,
+ * or the running focus counts as 未分类.
+ */
+export function withLive(sessions: Session[], userId: UserId, l: LiveStatus | undefined, tz: string, now = Date.now(), subjects: Subject[] = []): Session[] {
   const mine = sessions.filter((s) => s.userId === userId);
   const ms = liveFocusMs(l, now);
   if (l && ms > 0 && l.startedAt) {
-    mine.unshift({ id: "live", userId, subjectId: null, task: l.task, startedAt: l.startedAt, endedAt: now, durationMs: ms, mode: l.mode, rating: null, note: "", tz });
+    mine.unshift({ id: "live", userId, subjectId: liveSubjectId(l, userId, subjects), task: l.task, startedAt: l.startedAt, endedAt: now, durationMs: ms, mode: l.mode, rating: null, note: "", tz });
   }
   return mine;
 }

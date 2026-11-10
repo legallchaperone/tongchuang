@@ -2,7 +2,7 @@
  * R-007 收工: which day a review belongs to, today's totals, and whether someone's desk is dark.
  * A “work day” runs until 5 a.m. local time, so closing up at 1 a.m. still counts for the evening before.
  */
-import type { DailyReview, LiveStatus, Session, UserId } from "./types";
+import type { DailyReview, LiveStatus, Session, Subject, UserId } from "./types";
 import { addDaysKey, dayKey, partsIn } from "./time";
 import { msOnDay, withLive } from "./stats";
 
@@ -23,8 +23,8 @@ export function workDayMs(sessions: Session[], userId: UserId, live: LiveStatus 
 }
 
 /** sessions (running one included) that count for the work day */
-export function workDaySessions(sessions: Session[], userId: UserId, live: LiveStatus | undefined, tz: string, now: number) {
-  const mine = withLive(sessions, userId, live, tz, now);
+export function workDaySessions(sessions: Session[], userId: UserId, live: LiveStatus | undefined, tz: string, now: number, subjects: Subject[] = []) {
+  const mine = withLive(sessions, userId, live, tz, now, subjects);
   const wd = workDay(now, tz);
   const keys = new Set([wd, dayKey(now, tz)]);
   return mine.filter((s) => keys.has(dayKey(s.startedAt, tz)) || keys.has(dayKey(s.endedAt, tz)));

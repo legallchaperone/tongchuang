@@ -36,7 +36,7 @@ function slices(list: Session[], subjects: Subject[]): SubjectPart[] {
 export function profileStats(o: { p: Profile; sessions: Session[]; subjects: Subject[]; live?: LiveStatus; reviews: DailyReview[]; now: number }): ProfileStats {
   const { p, now } = o;
   const tz = p.tz;
-  const all = withLive(o.sessions, p.id, o.live, tz, now);
+  const all = withLive(o.sessions, p.id, o.live, tz, now, o.subjects);
   const subs = o.subjects.filter((s) => s.userId === p.id);
   const daily = byDay(all, tz);
   const todayKey = dayKey(now, tz);

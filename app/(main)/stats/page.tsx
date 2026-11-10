@@ -48,7 +48,7 @@ export default function StatsPage() {
   // no "vs previous period" while that period is still loading
   const delta = (a: number, b: number) => (app.historyLoading ? null : pctDelta(a, b));
 
-  const all = useMemo(() => withLive(app.sessions, p.id, app.live[p.id], tz, now), [app.sessions, p.id, app.live, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = useMemo(() => withLive(app.sessions, p.id, app.live[p.id], tz, now, app.subjects), [app.sessions, p.id, app.live, app.subjects, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
   const subjects = app.subjects.filter((s) => s.userId === p.id);
   const goal = p.dailyGoalMin * MIN;
   const keys = useMemo(() => lastDays(range, tz, now), [range, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps

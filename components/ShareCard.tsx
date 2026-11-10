@@ -25,7 +25,7 @@ function YearSheet({ onClose }: { onClose: () => void }) {
   const [now] = useState(() => Date.now());
 
   const data = useMemo(() => shareData({
-    sessions: withLive(app.sessions, me.id, app.live[me.id], me.tz, now),
+    sessions: withLive(app.sessions, me.id, app.live[me.id], me.tz, now, app.subjects),
     subjects: app.subjects.filter((s) => s.userId === me.id),
     tz: me.tz, now, name: me.name, look: lookOf(me), shirt: shirtOf(me),
   }), [app.sessions, app.subjects, app.live, me, now]);

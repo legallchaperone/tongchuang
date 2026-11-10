@@ -32,7 +32,7 @@ export default function TodayPage() {
   const tz = prof.tz;
   const meId = app.me!.id;
   const now = app.now;
-  const mineAll = useMemo(() => withLive(app.sessions, meId, app.live[meId], tz, now), [app.sessions, meId, app.live, tz, now]);
+  const mineAll = useMemo(() => withLive(app.sessions, meId, app.live[meId], tz, now, app.subjects), [app.sessions, meId, app.live, app.subjects, tz, now]);
   const daily = useMemo(() => byDay(mineAll, tz), [mineAll, tz]);
   const todayMs = daily.get(dayKey(now, tz)) || 0;
   const goal = prof.dailyGoalMin * MIN;

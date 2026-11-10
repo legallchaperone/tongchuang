@@ -44,7 +44,7 @@ export default function WrapPage() {
     setInit(true);
   }, [existing, init]);
 
-  const sessions = useMemo(() => (prof ? workDaySessions(app.sessions, meId, app.live[meId], tz, now) : []), [app.sessions, meId, app.live, tz, prof, Math.floor(now / 60000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sessions = useMemo(() => (prof ? workDaySessions(app.sessions, meId, app.live[meId], tz, now, app.subjects) : []), [app.sessions, meId, app.live, app.subjects, tz, prof, Math.floor(now / 60000)]); // eslint-disable-line react-hooks/exhaustive-deps
   const today = dayKey(now, tz);
   const shareOf = useMemo(() => (s: (typeof sessions)[number]) => msOnDay([s], tz, wd) + (wd !== today ? msOnDay([s], tz, today) : 0), [tz, wd, today]);
   const total = sessions.reduce((a, s) => a + shareOf(s), 0);

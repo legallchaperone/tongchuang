@@ -28,7 +28,7 @@ function useDayLoaded(userId: UserId, day: string, tz: string) {
   return ok;
 }
 
-/** one person's sessions, the running one included, with the running one's subject filled in by name */
+/** one person's sessions, the running one included */
 function useSessions(userId: UserId, at?: number) {
   const app = useApp();
   const p = app.profiles[userId];
@@ -36,12 +36,7 @@ function useSessions(userId: UserId, at?: number) {
   const now = at ?? app.now;
   const minute = Math.floor(now / MIN);
   return useMemo(() => {
-    const l = app.live[userId];
-    return withLive(app.sessions, userId, l, tz, now).map((s) => {
-      if (s.id !== "live" || !l?.subjectName) return s;
-      const sub = app.subjects.find((x) => x.userId === userId && x.name === l.subjectName && !x.archived) || app.subjects.find((x) => x.userId === userId && x.name === l.subjectName);
-      return sub ? { ...s, subjectId: sub.id } : s;
-    });
+    return withLive(app.sessions, userId, app.live[userId], tz, now, app.subjects);
   }, [app.sessions, app.live, app.subjects, userId, tz, minute]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
