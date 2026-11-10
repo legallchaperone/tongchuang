@@ -194,3 +194,65 @@ export interface SubjectFolder {
   name: string;
   createdAt: number;
 }
+
+/* ── R-030 同修 ── */
+
+/** one run of a course: some classmates starting it on the same day, inside one study room */
+export interface Cohort {
+  id: string;
+  courseId: string;
+  name: string;
+  roomId: string;
+  /** "YYYY-MM-DD": day 1 of week 1 */
+  startsOn: string;
+  createdBy: UserId;
+  createdAt: number;
+}
+
+export interface CohortMember {
+  cohortId: string;
+  userId: UserId;
+  /** the subject made for this course when joining; focus time on it counts as course time */
+  subjectId: string | null;
+  /** milestone ids a 缓交卡 was used on (at most MAX_EXTENSIONS) */
+  extensions: string[];
+  joinedAt: number;
+  leftAt: number | null;
+}
+
+/** what everyone in the cohort sees: handed in or not, tests, the metric */
+export interface Submission {
+  id: string;
+  cohortId: string;
+  userId: UserId;
+  milestoneId: string;
+  testsPassed: number | null;
+  testsTotal: number | null;
+  metric: number | null;
+  /** the deadline this submission is measured against (extensions included) */
+  dueAt: number;
+  firstSubmittedAt: number;
+  updatedAt: number;
+  /** asked the developers for feedback (they run it through Claude by hand) */
+  feedbackRequestedAt: number | null;
+}
+
+/** the content: only the owner until the deadline passes or the reader has handed in the same milestone */
+export interface SubmissionDetail {
+  submissionId: string;
+  userId: UserId;
+  link: string;
+  note: string;
+  /** keep it to myself even after the deadline */
+  private: boolean;
+}
+
+export interface SubmissionFeedback {
+  id: string;
+  submissionId: string;
+  /** the learner it is for */
+  userId: UserId;
+  authorId: UserId;
+  text: string;
+  createdAt: number;
+}

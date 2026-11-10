@@ -1,6 +1,6 @@
 # 需求梳理：一起上课（R-030）
 
-> 2026-11-10。起因：想和同学一起学 Stanford CS336（Language Modeling from Scratch），一起学更有动力。本文把原始想法拆成能拍板的问题，给出推荐做法和第一版范围。登记在 [需求池](../BACKLOG.md) R-030。
+> 2026-11-10。**已拍板并在 v1.11.0 上线第一版**，决定见文末“拍板结果”。起因：想和同学一起学 Stanford CS336（Language Modeling from Scratch），一起学更有动力。本文把原始想法拆成能拍板的问题，给出推荐做法和第一版范围。登记在 [需求池](../BACKLOG.md) R-030。
 
 ## 原始想法
 
@@ -168,3 +168,39 @@ CS336 选课的学生不能公开答案；我们这里都是自学，但一起�
 - [CS336 Spring 2025 课程页](https://cs336.stanford.edu/spring2025)、[CS336 当前课程页](https://cs336.stanford.edu)
 - [DataTalksClub course-management-platform](https://github.com/DataTalksClub/course-management-platform)、[Zoomcamp 截止与安排](https://datatalks.club/docs/courses/data-engineering-zoomcamp/logistics/deadlines)
 - Datawhale 组队学习、GitHub Classroom、Gradescope autograder：按公开介绍整理，没有逐项核对最新规则。
+
+---
+
+## 拍板结果（2026-11-10）
+
+| 问题 | 决定 |
+|---|---|
+| 名字 | **同修** |
+| 截止时间 | **地球上最晚的时区（AoE，UTC-12）**：某天截止 = 那一天在地球上所有地方都过完，即次日 12:00 UTC。页面同时显示“你这里是几点” |
+| 迟交 | 截止后还能交，标“迟交”；每人每期 3 张缓交卡，一张晚 3 天；不踢人 |
+| 能不能看别人交的内容 | 截止前只看得到交没交、测试数；截止后或自己也交了同一步之后能看；可以选只给自己看 |
+| 开课申请 / zip | 不做。课程由开发者整理成 `lib/courses/*.ts`，随版本发布 |
+| AI 反馈 | 不接 API。学习者勾“请开发者帮我看看”，开发者在 `/tongxiu/staff` 复制提示词交给 Claude，把反馈贴回来，对方收到提醒 |
+
+实现位置：`lib/courses/`（课表）、`lib/tongxiu.ts`（截止时间、进度、pytest 解析、给 Claude 的提示词）、`app/(main)/tongxiu/`（页面）、`supabase/schema.sql` 的 R-030 一节（表和行级权限）。
+
+## 六、作业改成 marimo 笔记本？（待定）
+
+起因：molab（marimo 的云端笔记本）目前免费提供 RTX Pro 6000（96GB，Blackwell）；单卡，一次最长 12 小时，空闲 90 分钟自动关机（据 marimo 官方博客，公开预览期间，条款可能变）。
+
+**建议：不把作业本身改写成笔记本，而是给每个作业配一个 molab“启动器”笔记本。**
+
+不建议整份改写的原因：
+
+- CS336 的作业是一个 Python 包：分词器、模型、优化器、训练脚本分在多个文件里，测试通过 `tests/adapters.py` 接进来。改成笔记本要么把代码塞进单元格（测试接不上），要么重新组织（和官方说明、测试对不上）。
+- 课程每年更新，改写过的版本要跟着重做。
+- 官方仓库的许可没有查到，改写后再分发需要先确认。
+
+启动器笔记本（每个作业一个，几十行）做这些事：
+
+1. 克隆学习者自己 fork 的仓库（或 `git pull`），`uv sync` 装依赖；检查 GPU 和 PyTorch / Triton 版本是否支持 Blackwell。
+2. 一个按钮跑官方测试，显示结果，最后一行可以直接复制进同修的提交框。
+3. 跑训练脚本，用 marimo 的图表实时画 loss；定期存 checkpoint，被关机后能接着跑。
+4. 可选：一些交互式的小实验（看 BPE 合并过程、注意力图），这部分适合笔记本。
+
+代码还是在自己的编辑器里写、push 到 GitHub；GPU 的活在 molab 上跑。同修的课表里给需要 GPU 的阶段加“在 molab 打开”链接即可，不用改同修本身。

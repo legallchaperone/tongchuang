@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useApp } from "@/lib/store";
 import { Avatar } from "@/components/bits";
 import { tzCity } from "@/lib/time";
+import { IBook } from "@/components/Icons";
 
 export default function RoomsPage() {
   const app = useApp();
@@ -31,6 +32,7 @@ export default function RoomsPage() {
     <div className="page">
       <div className="pagehead">
         <div><h1>自习室</h1><p className="sub">一个自习室最多 12 人。里面的人能看到彼此的实时状态和学习记录。</p></div>
+        <Link className="btn" href="/tongxiu"><IBook />同修：和同窗一起修一门课</Link>
       </div>
 
       {app.rooms.length > 0 && (

@@ -1,9 +1,10 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
 import { checkTodo, TODO_MISSING } from "../todos";
+import { FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX, TONGXIU_MISSING } from "../tongxiu";
 const FOLDER_MISSING = "文件夹还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -518,6 +519,121 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       const { error } = await sb.from("subject_folders").delete().eq("id", id);
       if (error) throw folderError(error);
     },
+    // R-030 同修
+    async listCohorts() {
+      const { data, error } = await sb.from("cohorts").select("*").order("created_at");
+      if (error) throw txError(error);
+      const cohorts = (data as any[]).map(toCohort);
+      if (!cohorts.length) return { cohorts, members: [] };
+      const ms = await sb.from("cohort_members").select("*").in("cohort_id", cohorts.map((c) => c.id));
+      if (ms.error) throw txError(ms.error);
+      return { cohorts, members: (ms.data as any[]).map(toMember) };
+    },
+    async createCohort(c) {
+      const name = c.name.trim();
+      if (!name) throw new Error("给这一期起个名字");
+      const { data, error } = await sb.from("cohorts")
+        .insert({ course_id: c.courseId, name, room_id: c.roomId, starts_on: c.startsOn, created_by: await myId() }).select().single();
+      if (error) throw txError(error);
+      return toCohort(data);
+    },
+    async joinCohort(cohortId, subjectId) {
+      const { data, error } = await sb.from("cohort_members")
+        .upsert({ cohort_id: cohortId, user_id: await myId(), subject_id: subjectId, left_at: null }).select().single();
+      if (error) throw txError(error);
+      return toMember(data);
+    },
+    async leaveCohort(cohortId) {
+      const { error } = await sb.from("cohort_members").update({ left_at: new Date().toISOString() }).eq("cohort_id", cohortId).eq("user_id", await myId());
+      if (error) throw txError(error);
+    },
+    async setExtensions(cohortId, ids) {
+      if (ids.length > MAX_EXTENSIONS) throw new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
+      const { error } = await sb.from("cohort_members").update({ extensions: ids }).eq("cohort_id", cohortId).eq("user_id", await myId());
+      if (error) throw txError(error);
+    },
+    async listSubmissions(cohortIds) {
+      if (!cohortIds.length) return [];
+      const { data, error } = await sb.from("submissions").select("*").in("cohort_id", cohortIds);
+      if (error) throw txError(error);
+      return (data as any[]).map(toSubmission);
+    },
+    async listSubmissionDetails(ids) {
+      if (!ids.length) return [];
+      const out: SubmissionDetail[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await sb.from("submission_details").select("*").in("submission_id", ids.slice(i, i + 200));
+        if (error) throw txError(error);
+        out.push(...(data as any[]).map(toDetail));
+      }
+      return out;
+    },
+    async listFeedback(ids) {
+      if (!ids.length) return [];
+      const out: SubmissionFeedback[] = [];
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await sb.from("submission_feedback").select("*").in("submission_id", ids.slice(i, i + 200)).order("created_at");
+        if (error) throw txError(error);
+        out.push(...(data as any[]).map(toFeedback));
+      }
+      return out;
+    },
+    async saveSubmission(s) {
+      if (s.link.length > LINK_MAX) throw new Error(`链接最多 ${LINK_MAX} 个字符`);
+      if (s.note.length > NOTE_MAX) throw new Error(`说明最多 ${NOTE_MAX} 个字`);
+      const uid = await myId();
+      const row: any = {
+        cohort_id: s.cohortId, user_id: uid, milestone_id: s.milestoneId,
+        tests_passed: s.testsPassed, tests_total: s.testsTotal, metric: s.metric, due_at: iso(s.dueAt),
+      };
+      // the database stamps the actual time; any new value just means "asked again"
+      if (s.requestFeedback) row.feedback_requested_at = new Date().toISOString();
+      const a = await sb.from("submissions").upsert(row, { onConflict: "cohort_id,user_id,milestone_id" }).select().single();
+      if (a.error) throw txError(a.error);
+      const submission = toSubmission(a.data);
+      const b = await sb.from("submission_details")
+        .upsert({ submission_id: submission.id, user_id: uid, link: s.link.trim(), note: s.note, private: s.private }).select().single();
+      if (b.error) throw txError(b.error);
+      return { submission, detail: toDetail(b.data) };
+    },
+    subscribeSubmissions(cohortIds, cb) {
+      const set = new Set(cohortIds);
+      if (!set.size) return () => {};
+      const ch = sb.channel("subs-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, (p: any) => {
+          if (p.new?.id && set.has(p.new.cohort_id)) cb(toSubmission(p.new));
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
+    subscribeFeedback(me, cb) {
+      const ch = sb.channel("fb-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "submission_feedback", filter: `user_id=eq.${me}` }, (p: any) => {
+          if (p.new?.id) cb(toFeedback(p.new));
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
+    async isStaff() {
+      const { data, error } = await sb.rpc("is_staff");
+      if (error) return false;
+      return !!data;
+    },
+    async listFeedbackRequests() {
+      const { data, error } = await sb.from("submissions").select("*").not("feedback_requested_at", "is", null)
+        .order("feedback_requested_at", { ascending: false }).limit(200);
+      if (error) throw txError(error);
+      return (data as any[]).map(toSubmission);
+    },
+    async addFeedback(f) {
+      const text = f.text.trim();
+      if (!text) throw new Error("反馈是空的");
+      if (text.length > FEEDBACK_MAX) throw new Error(`反馈最多 ${FEEDBACK_MAX} 个字`);
+      const { data, error } = await sb.from("submission_feedback")
+        .insert({ submission_id: f.submissionId, user_id: f.userId, author_id: await myId(), text }).select().single();
+      if (error) throw txError(error);
+      return toFeedback(data);
+    },
     subscribeGuestbookReplies(me, cb) {
       const ch = sb.channel("gbr-" + Math.random().toString(36).slice(2))
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "guestbook", filter: `reply_to=eq.${me}` }, (p: any) => {
@@ -575,6 +691,36 @@ function guestbookError(e: { message: string; code?: string }): Error {
   if (/guestbook_not_empty/.test(m)) return new Error("写句话或者选张贴纸吧");
   if (/guestbook_reply_text/.test(m)) return new Error("回复写句话吧");
   if (/parent_id|reply_to/.test(m) && /schema cache|does not exist|Could not find/i.test(m)) return new Error("回复功能还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql");
+  if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
+  return new Error(m);
+}
+
+const toCohort = (r: any): Cohort => ({
+  id: r.id, courseId: r.course_id, name: r.name || "", roomId: r.room_id, startsOn: String(r.starts_on).slice(0, 10),
+  createdBy: r.created_by, createdAt: ts(r.created_at) || 0,
+});
+const toMember = (r: any): CohortMember => ({
+  cohortId: r.cohort_id, userId: r.user_id, subjectId: r.subject_id || null, extensions: Array.isArray(r.extensions) ? r.extensions : [],
+  joinedAt: ts(r.joined_at) || 0, leftAt: ts(r.left_at),
+});
+const num = (v: any) => (v == null ? null : Number(v));
+const toSubmission = (r: any): Submission => ({
+  id: r.id, cohortId: r.cohort_id, userId: r.user_id, milestoneId: r.milestone_id,
+  testsPassed: num(r.tests_passed), testsTotal: num(r.tests_total), metric: num(r.metric),
+  dueAt: ts(r.due_at) || 0, firstSubmittedAt: ts(r.first_submitted_at) || 0, updatedAt: ts(r.updated_at) || 0,
+  feedbackRequestedAt: ts(r.feedback_requested_at),
+});
+const toDetail = (r: any): SubmissionDetail => ({ submissionId: r.submission_id, userId: r.user_id, link: r.link || "", note: r.note || "", private: !!r.private });
+const toFeedback = (r: any): SubmissionFeedback => ({
+  id: r.id, submissionId: r.submission_id, userId: r.user_id, authorId: r.author_id, text: r.text || "", createdAt: ts(r.created_at) || 0,
+});
+/** R-030: the usual failures in plain Chinese */
+function txError(e: { message: string; code?: string }): Error {
+  const m = e.message || "";
+  if (e.code === "42P01" || e.code === "PGRST205" || (/cohort|submission|staff/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TONGXIU_MISSING);
+  if (/row-level security/i.test(m)) return new Error("没有权限：同修只对这个自习室里的人开放");
+  if (/extensions_check|cardinality/.test(m)) return new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
+  if (/name_check/.test(m)) return new Error("名字 1–40 个字");
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }

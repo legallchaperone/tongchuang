@@ -1,9 +1,11 @@
 import type { Backend } from "./types";
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
 import { checkComment } from "../comments";
 import { checkTodo } from "../todos";
+import { CS336 } from "../courses/cs336";
+import { dueAt as milestoneDue, FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX } from "../tongxiu";
 import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
@@ -28,6 +30,8 @@ type DB = {
   comments?: SessionComment[];
   todos?: Todo[];
   folders?: SubjectFolder[];
+  /** R-030 同修; added lazily to older demo data */
+  tx?: { cohorts: Cohort[]; members: CohortMember[]; subs: Submission[]; details: SubmissionDetail[]; feedback: SubmissionFeedback[] };
 };
 
 function rng(seed: number) {
@@ -288,6 +292,45 @@ function seedTodos(db: DB): Todo[] {
   ];
 }
 
+
+/* ── R-030: a CS336 cohort that started three weeks ago; the two classmates joined, I have not yet ── */
+function seedTongxiu(db: DB): NonNullable<DB["tx"]> {
+  const tz = db.profiles.find((p) => p.id === ME)?.tz || browserTz();
+  const today = dayKey(Date.now(), tz);
+  const wd = (new Date(today + "T12:00:00Z").getUTCDay() + 6) % 7; // days since Monday
+  const startsOn = addDaysKey(today, -wd - 14); // Monday, two weeks before this week's: now in week 3
+  const room = db.rooms[0];
+  const cohort: Cohort = { id: "demo-cohort", courseId: CS336.id, name: "第 1 期", roomId: room.id, startsOn, createdBy: "demo-lin", createdAt: Date.now() - 20 * DAY };
+  const members: CohortMember[] = [];
+  const retag: Record<string, string> = { "demo-lin": "算法", "demo-mia": "论文阅读" };
+  for (const fid of ["demo-lin", "demo-mia"]) {
+    const sub: Subject = { id: uid(), userId: fid, name: CS336.name, color: fid === "demo-lin" ? 0 : 6, archived: false };
+    db.subjects.push(sub);
+    // some of their recent study time becomes course time
+    const old = db.subjects.find((x) => x.userId === fid && x.name === retag[fid]);
+    let flip = false;
+    db.sessions.forEach((x) => { if (old && x.userId === fid && x.subjectId === old.id && x.startedAt > Date.now() - 20 * DAY) { flip = !flip; if (flip) x.subjectId = sub.id; } });
+    members.push({ cohortId: cohort.id, userId: fid, subjectId: sub.id, extensions: [], joinedAt: Date.now() - 19 * DAY, leftAt: null });
+  }
+  const ms = CS336.milestones;
+  const subs: Submission[] = [], details: SubmissionDetail[] = [], feedback: SubmissionFeedback[] = [];
+  const hand = (userId: UserId, mi: number, early: number, o: Partial<Submission>, d: Partial<SubmissionDetail>) => {
+    const due = milestoneDue(cohort, ms[mi], null);
+    const at = due - early;
+    const s: Submission = { id: uid(), cohortId: cohort.id, userId, milestoneId: ms[mi].id, testsPassed: null, testsTotal: null, metric: null, dueAt: due, firstSubmittedAt: at, updatedAt: at, feedbackRequestedAt: null, ...o };
+    subs.push(s);
+    details.push({ submissionId: s.id, userId, link: "", note: "", private: false, ...d });
+    return s;
+  };
+  hand("demo-lin", 0, 5 * DAY, { testsPassed: 0, testsTotal: 48 }, { link: "https://github.com/example/assignment1-basics", note: "在 molab 上开了 GPU 环境，本机 Mac 也能跑测试。最想弄懂：为什么 RoPE 比绝对位置编码好。" });
+  hand("demo-mia", 0, 2 * DAY, { testsPassed: 0, testsTotal: 48 }, { link: "https://github.com/example/cs336-a1", note: "本机跑测试，训练打算用 molab。最想弄懂 FlashAttention。" });
+  hand("demo-lin", 1, -DAY / 2, { testsPassed: 3, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) }, { link: "https://github.com/example/assignment1-basics/commit/abc123", note: "BPE 训练一开始要 20 分钟，改成只更新受影响的 pair 之后 TinyStories 大概 90 秒。最长的 token 是 \" accomplishment\"。" });
+  const fb = hand("demo-mia", 1, DAY, { testsPassed: 2, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) - DAY }, { note: "test_train_bpe_speed 还没过，pre-tokenization 用了多进程但合并那步还是慢。" });
+  feedback.push({ id: uid(), submissionId: fb.id, userId: "demo-mia", authorId: ME, createdAt: fb.firstSubmittedAt + 6 * HOUR,
+    text: "预分词用多进程是对的方向，做得好的是你已经把语料按特殊 token 切块了。\n\n还没过速度测试，最可能的原因是每次合并之后重新统计了所有 pair。建议：维护 pair → 计数 和 pair → 出现在哪些词里 两张表，合并时只更新受影响的词。" });
+  return { cohorts: [cohort], members, subs, details, feedback };
+}
+
 export function createDemoBackend(): Backend {
   let db: DB;
   try { db = (typeof window !== "undefined" && JSON.parse(localStorage.getItem(KEY) || "null")) || seed(); } catch { db = seed(); }
@@ -302,10 +345,23 @@ export function createDemoBackend(): Backend {
     db.folders = [f];
     db.subjects.forEach((x) => { if (x.userId === ME && (x.name === "线性代数" || x.name === "英语阅读")) x.folderId = f.id; });
   }
+  if (!db.tx) db.tx = seedTongxiu(db);
   // R-020: older demo data has no pages yet
   db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
   const fr = () => db.profiles.filter((p) => p.id !== ME);
+  const txSubs = new Set<{ ids: Set<string>; cb: (s: Submission) => void }>();
+  const fbSubs = new Set<(f: SubmissionFeedback) => void>();
+  /** R-030: the same rule as can_see_submission() in schema.sql */
+  const txCanSee = (submissionId: string) => {
+    const x = db.tx!.subs.find((s) => s.id === submissionId);
+    const d = db.tx!.details.find((y) => y.submissionId === submissionId);
+    if (!x || !d) return false;
+    if (x.userId === ME) return true;
+    if (d.private) return false;
+    return x.dueAt < Date.now() || db.tx!.subs.some((y) => y.cohortId === x.cohortId && y.milestoneId === x.milestoneId && y.userId === ME);
+  };
+
   const friendDef = () => friendsFor(db.profiles.find((p) => p.id === ME)!.tz);
 
   const authCbs = new Set<(u: AuthUser | null) => void>();
@@ -680,6 +736,76 @@ export function createDemoBackend(): Backend {
       db.folders = db.folders!.filter((x) => x.id !== id);
       db.subjects.forEach((x) => { if (x.folderId === id) x.folderId = null; });
       save();
+    },
+    // R-030 同修
+    async listCohorts() {
+      const mine = new Set(db.rooms.filter((r) => r.memberIds.includes(ME)).map((r) => r.id));
+      const cohorts = db.tx!.cohorts.filter((c) => mine.has(c.roomId));
+      const ids = new Set(cohorts.map((c) => c.id));
+      return delay({ cohorts: cohorts.map((c) => ({ ...c })), members: db.tx!.members.filter((m) => ids.has(m.cohortId)).map((m) => ({ ...m, extensions: [...m.extensions] })) });
+    },
+    async createCohort({ courseId, name, roomId, startsOn }) {
+      if (!name.trim()) throw new Error("给这一期起个名字");
+      if (!db.rooms.some((r) => r.id === roomId && r.memberIds.includes(ME))) throw new Error("只能在自己的自习室里开");
+      const c: Cohort = { id: uid(), courseId, name: name.trim(), roomId, startsOn, createdBy: ME, createdAt: Date.now() };
+      db.tx!.cohorts.push(c); save(); return { ...c };
+    },
+    async joinCohort(cohortId, subjectId) {
+      const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
+      if (hit) { hit.leftAt = null; hit.subjectId = subjectId; save(); return { ...hit }; }
+      const m: CohortMember = { cohortId, userId: ME, subjectId, extensions: [], joinedAt: Date.now(), leftAt: null };
+      db.tx!.members.push(m); save(); return { ...m };
+    },
+    async leaveCohort(cohortId) {
+      const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
+      if (hit) { hit.leftAt = Date.now(); save(); }
+    },
+    async setExtensions(cohortId, ids) {
+      if (ids.length > MAX_EXTENSIONS) throw new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
+      const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
+      if (hit) { hit.extensions = [...ids]; save(); }
+    },
+    listSubmissions: async (cohortIds) => delay(db.tx!.subs.filter((s) => cohortIds.includes(s.cohortId)).map((s) => ({ ...s }))),
+    async listSubmissionDetails(ids) {
+      const set = new Set(ids);
+      return delay(db.tx!.details.filter((d) => set.has(d.submissionId) && txCanSee(d.submissionId)).map((d) => ({ ...d })));
+    },
+    async listFeedback(ids) {
+      const set = new Set(ids);
+      return delay(db.tx!.feedback.filter((f) => set.has(f.submissionId) && (f.userId === ME || txCanSee(f.submissionId))).map((f) => ({ ...f })));
+    },
+    async saveSubmission(x) {
+      if (x.link.length > LINK_MAX) throw new Error(`链接最多 ${LINK_MAX} 个字符`);
+      if (x.note.length > NOTE_MAX) throw new Error(`说明最多 ${NOTE_MAX} 个字`);
+      if (!db.tx!.members.some((m) => m.cohortId === x.cohortId && m.userId === ME && !m.leftAt)) throw new Error("先加入这一期");
+      const now = Date.now();
+      let s = db.tx!.subs.find((y) => y.cohortId === x.cohortId && y.userId === ME && y.milestoneId === x.milestoneId);
+      if (!s) {
+        s = { id: uid(), cohortId: x.cohortId, userId: ME, milestoneId: x.milestoneId, testsPassed: null, testsTotal: null, metric: null, dueAt: x.dueAt, firstSubmittedAt: now, updatedAt: now, feedbackRequestedAt: null };
+        db.tx!.subs.push(s);
+      }
+      Object.assign(s, { testsPassed: x.testsPassed, testsTotal: x.testsTotal, metric: x.metric, dueAt: x.dueAt, updatedAt: now });
+      if (x.requestFeedback) s.feedbackRequestedAt = now;
+      let d = db.tx!.details.find((y) => y.submissionId === s!.id);
+      if (!d) { d = { submissionId: s.id, userId: ME, link: "", note: "", private: false }; db.tx!.details.push(d); }
+      Object.assign(d, { link: x.link.trim(), note: x.note, private: x.private });
+      save();
+      const out = { ...s };
+      txSubs.forEach((t) => t.ids.has(out.cohortId) && t.cb(out));
+      return { submission: out, detail: { ...d } };
+    },
+    subscribeSubmissions(cohortIds, cb) { const x = { ids: new Set(cohortIds), cb }; txSubs.add(x); return () => { txSubs.delete(x); }; },
+    subscribeFeedback(_me, cb) { fbSubs.add(cb); return () => { fbSubs.delete(cb); }; },
+    isStaff: async () => delay(true),
+    listFeedbackRequests: async () => delay(db.tx!.subs.filter((s) => s.feedbackRequestedAt != null).sort((a, b) => b.feedbackRequestedAt! - a.feedbackRequestedAt!).map((s) => ({ ...s }))),
+    async addFeedback({ submissionId, userId, text: raw }) {
+      const text = raw.trim();
+      if (!text) throw new Error("反馈是空的");
+      if (text.length > FEEDBACK_MAX) throw new Error(`反馈最多 ${FEEDBACK_MAX} 个字`);
+      const f: SubmissionFeedback = { id: uid(), submissionId, userId, authorId: ME, text, createdAt: Date.now() };
+      db.tx!.feedback.push(f); save();
+      if (userId === ME) fbSubs.forEach((cb) => cb({ ...f }));
+      return { ...f };
     },
     subscribeGuestbookReplies(_me, cb) { gbReplySubs.add(cb); return () => { gbReplySubs.delete(cb); }; },
   };

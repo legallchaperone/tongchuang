@@ -5,16 +5,21 @@ import React, { useEffect } from "react";
 import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { clock } from "@/lib/time";
-import { IPlay, IRoom, ISettings, IStats, IToday, Logo } from "./Icons";
+import { IBook, IPlay, IRoom, ISettings, IStats, IToday, Logo } from "./Icons";
 import { Avatar, Spinner } from "./bits";
 import { StatusButton } from "./Status";
+import { TongxiuWatcher } from "./tongxiu/Watcher";
 
 const NAV = [
   { href: "/", label: "今天", icon: <IToday /> },
   { href: "/rooms", label: "自习室", icon: <IRoom /> },
+  { href: "/tongxiu", label: "同修", icon: <IBook /> },
   { href: "/stats", label: "数据", icon: <IStats /> },
   { href: "/settings", label: "设置", icon: <ISettings /> },
 ];
+
+/** the phone tab bar has room for four around the focus button; 同修 is reached from the 自习室 page there */
+const TABS = NAV.filter((n) => n.href !== "/tongxiu");
 
 export function useAuthGate() {
   const app = useApp();
@@ -63,13 +68,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link href={`/u/${encodeURIComponent(app.myProfile.id)}`} className="me-chip" title="我的主页"><Avatar p={app.myProfile} size={28} showSky={false} live={app.me ? app.live[app.me.id] : undefined} /><span>{app.myProfile.name}</span></Link>
         )}
       </aside>
+      {ready && <TongxiuWatcher />}
       <main className="main">{ready ? children : app.status === "error" ? <ErrorBox msg={app.error} retry={app.reload} /> : <Spinner />}</main>
       <nav className="tabbar">
-        {NAV.slice(0, 2).map((n) => <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.icon}{n.label}</Link>)}
+        {TABS.slice(0, 2).map((n) => <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.icon}{n.label}</Link>)}
         <Link href="/focus" className={`fab ${f && f.phase !== "breakDone" ? "on" : ""}`} aria-label="专注">
           <span className="circle">{f && f.phase !== "breakDone" ? <span className="num" style={{ fontSize: 11 }}>{clock(Math.max(0, left)).slice(0, 5)}</span> : <IPlay />}</span>
         </Link>
-        {NAV.slice(2).map((n) => <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.icon}{n.label}</Link>)}
+        {TABS.slice(2).map((n) => <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.icon}{n.label}</Link>)}
       </nav>
     </div>
   );

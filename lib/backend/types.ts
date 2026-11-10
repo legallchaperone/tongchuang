@@ -1,4 +1,4 @@
-import type { AuthUser, DailyReview, GuestbookEntry, Kudos, SessionComment, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -109,4 +109,33 @@ export interface Backend {
   saveFolder(f: { id?: string; name: string }): Promise<SubjectFolder>;
   /** its subjects go back to the top level */
   deleteFolder(id: string): Promise<void>;
+
+  // R-030 同修
+  /** cohorts in my rooms (RLS), and everyone who joined them; a developer (staff) sees all of them */
+  listCohorts(): Promise<{ cohorts: Cohort[]; members: CohortMember[] }>;
+  createCohort(c: { courseId: string; name: string; roomId: string; startsOn: string }): Promise<Cohort>;
+  /** join (or come back to) a cohort; subjectId is my subject for the course */
+  joinCohort(cohortId: string, subjectId: string | null): Promise<CohortMember>;
+  leaveCohort(cohortId: string): Promise<void>;
+  /** replace the milestones I used a 缓交卡 on (at most MAX_EXTENSIONS) */
+  setExtensions(cohortId: string, milestoneIds: string[]): Promise<void>;
+  listSubmissions(cohortIds: string[]): Promise<Submission[]>;
+  /** RLS returns mine, and others' once their deadline has passed or I have handed in the same milestone */
+  listSubmissionDetails(submissionIds: string[]): Promise<SubmissionDetail[]>;
+  listFeedback(submissionIds: string[]): Promise<SubmissionFeedback[]>;
+  /** hand in or update my submission for one milestone */
+  saveSubmission(s: {
+    cohortId: string; milestoneId: string; testsPassed: number | null; testsTotal: number | null; metric: number | null;
+    dueAt: number; link: string; note: string; private: boolean; requestFeedback: boolean;
+  }): Promise<{ submission: Submission; detail: SubmissionDetail }>;
+  /** realtime: submissions handed in or updated in these cohorts */
+  subscribeSubmissions(cohortIds: string[], cb: (s: Submission) => void): Unsub;
+  /** realtime: feedback written for me */
+  subscribeFeedback(me: UserId, cb: (f: SubmissionFeedback) => void): Unsub;
+  /** am I one of the developers who write feedback */
+  isStaff(): Promise<boolean>;
+  /** staff only: every submission that asked for feedback, newest first */
+  listFeedbackRequests(): Promise<Submission[]>;
+  /** staff only */
+  addFeedback(f: { submissionId: string; userId: UserId; text: string }): Promise<SubmissionFeedback>;
 }

@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
-![version](https://img.shields.io/badge/version-1.10.5-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.11.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -50,6 +50,10 @@
 点任何头像或名字进入对方的主页：实时书桌、签名，以及主人自己挑选和排列的小组件，比如正在攻克的目标倒计时、里程碑徽章、一年的长势、科目分布、最近的专注。主页下方是留言板：同窗可以贴一张便利贴，写一句话或者贴一张像素贴纸。
 
 ![个人主页](docs/screenshots/profile.png)
+
+### 同修：和同窗一起修一门课
+
+选一门课（第一门是 Stanford CS336），在自习室里开一期，同窗点一下就加入。课程排成每周一个要交的东西，截止时间按地球上最晚的时区算；交作业时贴链接、贴 pytest 结果、写说明，截止后大家能互相看。进度格子里谁交了一目了然，时长只算这门课的专注。可以请开发者看看：开发者用 Claude 写反馈，写好了会提醒你。
 
 ### 数据：越记越想记
 
@@ -128,6 +132,7 @@ app/(main)/          今天、自习室、数据、设置（带侧边栏的页�
 app/focus/           全屏专注（番茄钟 / 心流 / 倒计时）
 app/wrap/            收工（每日总结）
 app/(main)/u/[id]/   个人主页（小组件、留言板）
+app/(main)/tongxiu/  同修：课程、每一期的进度和交作业、开发者写反馈（staff/）
 app/welcome/         新手引导
 app/release/         产品主页
 app/api/version/     当前部署的版本号（给更新提示用）
@@ -143,6 +148,8 @@ lib/shareCard.ts     一年热力图分享图
 lib/dayCard.ts       一天的分享图
 lib/profileCard.ts   主页分享图
 lib/stats.ts         统计（按各自时区分日）
+lib/courses/         同修的课表（每门课一个文件，开发者整理）
+lib/tongxiu.ts       同修：截止时间（UTC-12）、进度格子、pytest 结果解析、给 Claude 的提示词
 lib/changelog.json   版本与更新日志（唯一来源）
 supabase/schema.sql  表结构、行级权限、实时订阅、记录只能改短的数据库约束
 scripts/changelog.mjs 生成与校验 CHANGELOG.md

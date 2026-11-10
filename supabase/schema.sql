@@ -421,6 +421,183 @@ alter table public.subjects add column if not exists folder_id uuid references p
 -- 读写权限沿用 profiles 已有的 RLS：同自习室可读，只能改自己的。徽章由专注记录算出，不单独存。
 alter table public.profiles add column if not exists page jsonb;
 
+-- ───────────── R-030 同修 ─────────────
+-- 一门课的课表写在前端（lib/courses/），数据库只存“一期”、谁加入了、谁交了什么、开发者写的反馈。可重复运行。
+-- 一期同修挂在一个自习室下面：自习室的人能看到这一期、能加入；人数沿用自习室的 12 人上限。
+-- 截止时间按“地球上最晚的时区”（UTC-12）算，由前端算好写进 submissions.due_at（用了缓交卡的会晚 3 天）。
+
+-- 开发者（写 AI 反馈的人）。没有写入策略：只能在 SQL Editor 里加，例如
+--   insert into public.staff(user_id) select id from auth.users where email = '你的邮箱';
+create table if not exists public.staff (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.staff enable row level security;
+drop policy if exists "staff self" on public.staff;
+create policy "staff self" on public.staff for select using (user_id = auth.uid());
+
+create or replace function public.is_staff()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from staff where user_id = auth.uid());
+$$;
+
+create table if not exists public.cohorts (
+  id uuid primary key default gen_random_uuid(),
+  course_id text not null check (char_length(course_id) between 1 and 40),
+  name text not null check (char_length(btrim(name)) between 1 and 40),
+  room_id uuid not null references public.rooms(id) on delete cascade,
+  starts_on date not null,
+  created_by uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists cohorts_room_idx on public.cohorts(room_id);
+
+-- 我在不在这一期所在的自习室里
+create or replace function public.in_cohort_room(c uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from cohorts k join room_members m on m.room_id = k.room_id where k.id = c and m.user_id = auth.uid());
+$$;
+
+alter table public.cohorts enable row level security;
+drop policy if exists "cohorts read" on public.cohorts;
+create policy "cohorts read" on public.cohorts for select using (public.is_member(room_id) or public.is_staff());
+drop policy if exists "cohorts create" on public.cohorts;
+create policy "cohorts create" on public.cohorts for insert with check (created_by = auth.uid() and public.is_member(room_id));
+drop policy if exists "cohorts edit" on public.cohorts;
+create policy "cohorts edit" on public.cohorts for update using (created_by = auth.uid()) with check (created_by = auth.uid() and public.is_member(room_id));
+drop policy if exists "cohorts delete" on public.cohorts;
+create policy "cohorts delete" on public.cohorts for delete using (created_by = auth.uid());
+
+create table if not exists public.cohort_members (
+  cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  subject_id uuid references public.subjects(id) on delete set null,
+  extensions text[] not null default '{}' check (cardinality(extensions) <= 3),
+  joined_at timestamptz not null default now(),
+  left_at timestamptz,
+  primary key (cohort_id, user_id)
+);
+create index if not exists cohort_members_user_idx on public.cohort_members(user_id);
+alter table public.cohort_members enable row level security;
+drop policy if exists "cohort members read" on public.cohort_members;
+create policy "cohort members read" on public.cohort_members for select using (public.in_cohort_room(cohort_id) or public.is_staff());
+drop policy if exists "cohort members join" on public.cohort_members;
+create policy "cohort members join" on public.cohort_members for insert with check (user_id = auth.uid() and public.in_cohort_room(cohort_id));
+drop policy if exists "cohort members edit own" on public.cohort_members;
+create policy "cohort members edit own" on public.cohort_members for update using (user_id = auth.uid()) with check (user_id = auth.uid() and public.in_cohort_room(cohort_id));
+
+-- 交没交、测试通过几个、指标：同一期的人都看得到
+create table if not exists public.submissions (
+  id uuid primary key default gen_random_uuid(),
+  cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  milestone_id text not null check (char_length(milestone_id) between 1 and 60),
+  tests_passed integer check (tests_passed between 0 and 100000),
+  tests_total integer check (tests_total between 0 and 100000),
+  metric double precision,
+  due_at timestamptz not null,
+  first_submitted_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  feedback_requested_at timestamptz,
+  unique (cohort_id, user_id, milestone_id)
+);
+create index if not exists submissions_cohort_idx on public.submissions(cohort_id);
+create index if not exists submissions_feedback_idx on public.submissions(feedback_requested_at desc) where feedback_requested_at is not null;
+
+-- 第一次交的时间由数据库记，之后改内容不会变；“迟交”就看它和 due_at
+create or replace function public.guard_submission()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'INSERT' then
+    new.first_submitted_at := now();
+  else
+    new.first_submitted_at := old.first_submitted_at;
+    if new.user_id <> old.user_id or new.cohort_id <> old.cohort_id or new.milestone_id <> old.milestone_id then
+      raise exception 'submission owner cannot change';
+    end if;
+  end if;
+  new.updated_at := now();
+  if new.feedback_requested_at is not null and (tg_op = 'INSERT' or new.feedback_requested_at is distinct from old.feedback_requested_at) then
+    new.feedback_requested_at := now();
+  end if;
+  return new;
+end $$;
+drop trigger if exists submissions_guard on public.submissions;
+create trigger submissions_guard before insert or update on public.submissions
+  for each row execute function public.guard_submission();
+
+alter table public.submissions enable row level security;
+drop policy if exists "submissions read" on public.submissions;
+create policy "submissions read" on public.submissions for select using (public.in_cohort_room(cohort_id) or public.is_staff());
+drop policy if exists "submissions write own" on public.submissions;
+create policy "submissions write own" on public.submissions for insert with check (
+  user_id = auth.uid() and public.in_cohort_room(cohort_id)
+  and exists (select 1 from public.cohort_members m where m.cohort_id = submissions.cohort_id and m.user_id = auth.uid())
+);
+drop policy if exists "submissions edit own" on public.submissions;
+create policy "submissions edit own" on public.submissions for update using (user_id = auth.uid()) with check (user_id = auth.uid() and public.in_cohort_room(cohort_id));
+
+-- 交的内容（链接、说明）：截止前只有自己看得到；截止后、或者我自己也交了同一个阶段之后，同一期的人才能看（自己选了不公开的除外）
+create table if not exists public.submission_details (
+  submission_id uuid primary key references public.submissions(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  link text not null default '' check (char_length(link) <= 500),
+  note text not null default '' check (char_length(note) <= 4000),
+  private boolean not null default false
+);
+
+create or replace function public.can_see_submission(s uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from submissions x join submission_details d on d.submission_id = x.id
+    where x.id = s and (
+      x.user_id = auth.uid() or public.is_staff()
+      or (not d.private and public.in_cohort_room(x.cohort_id) and (
+        x.due_at < now()
+        or exists (select 1 from submissions y where y.cohort_id = x.cohort_id and y.milestone_id = x.milestone_id and y.user_id = auth.uid())
+      ))
+    )
+  );
+$$;
+
+alter table public.submission_details enable row level security;
+drop policy if exists "submission details read" on public.submission_details;
+create policy "submission details read" on public.submission_details for select using (user_id = auth.uid() or public.can_see_submission(submission_id));
+drop policy if exists "submission details write own" on public.submission_details;
+create policy "submission details write own" on public.submission_details for all using (user_id = auth.uid()) with check (
+  user_id = auth.uid() and exists (select 1 from public.submissions x where x.id = submission_id and x.user_id = auth.uid())
+);
+
+-- 开发者写的反馈（手动交给 Claude 生成后贴回来）。谁能看跟交的内容一样
+create table if not exists public.submission_feedback (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.submissions(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  author_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  text text not null check (char_length(btrim(text)) between 1 and 20000),
+  created_at timestamptz not null default now()
+);
+create index if not exists submission_feedback_sub_idx on public.submission_feedback(submission_id, created_at);
+alter table public.submission_feedback enable row level security;
+drop policy if exists "feedback read" on public.submission_feedback;
+create policy "feedback read" on public.submission_feedback for select using (user_id = auth.uid() or public.can_see_submission(submission_id));
+drop policy if exists "feedback write staff" on public.submission_feedback;
+create policy "feedback write staff" on public.submission_feedback for insert with check (
+  public.is_staff() and author_id = auth.uid()
+  and exists (select 1 from public.submissions x where x.id = submission_id and x.user_id = submission_feedback.user_id)
+);
+drop policy if exists "feedback delete staff" on public.submission_feedback;
+create policy "feedback delete staff" on public.submission_feedback for delete using (public.is_staff());
+
+-- 开发者要看到提交人的名字（可能不和他们在同一个自习室）
+drop policy if exists "profiles staff read" on public.profiles;
+create policy "profiles staff read" on public.profiles for select using (public.is_staff());
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.submissions; exception when others then null; end;
+  begin alter publication supabase_realtime add table public.submission_feedback; exception when others then null; end;
+end $$;
+
 -- ───────────── 最后：让 Supabase 的 API 立刻认识新加的列和表 ─────────────
 -- 不加这一句时，偶尔会看到 “Could not find the 'xxx' column of 'yyy' in the schema cache”
 notify pgrst, 'reload schema';

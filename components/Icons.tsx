@@ -18,6 +18,7 @@ export const ISound = () => <PxIcon name="sound" />;
 export const IExpand = () => <PxIcon name="expand" size={14} />;
 export const IFlame = () => <PxIcon name="flame" />;
 export const ITrash = () => <PxIcon name="trash" size={14} />;
+export const IBook = () => <PxIcon name="book" />;
 
 /** pixel desk lamp */
 const LOGO = [
