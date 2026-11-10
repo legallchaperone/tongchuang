@@ -1,11 +1,11 @@
 import type { Backend } from "./types";
-import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, TestResults, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { addDaysKey, browserTz, DAY, dayKey, HOUR, MIN, partsIn, zonedToUtc } from "../time";
 import { checkGuestbook } from "../guestbook";
 import { checkComment } from "../comments";
 import { checkTodo } from "../todos";
 import { CS336 } from "../courses/cs336";
-import { dueAt as milestoneDue, FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX } from "../tongxiu";
+import { dueAt as milestoneDue, fakeResults, FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX } from "../tongxiu";
 import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
@@ -31,7 +31,7 @@ type DB = {
   todos?: Todo[];
   folders?: SubjectFolder[];
   /** R-030 同修; added lazily to older demo data */
-  tx?: { cohorts: Cohort[]; members: CohortMember[]; subs: Submission[]; details: SubmissionDetail[]; feedback: SubmissionFeedback[] };
+  tx?: { cohorts: Cohort[]; members: CohortMember[]; subs: Submission[]; details: SubmissionDetail[]; feedback: SubmissionFeedback[]; tests?: TestResults[] };
 };
 
 function rng(seed: number) {
@@ -322,13 +322,34 @@ function seedTongxiu(db: DB): NonNullable<DB["tx"]> {
     details.push({ submissionId: s.id, userId, link: "", note: "", private: false, ...d });
     return s;
   };
-  hand("demo-lin", 0, 5 * DAY, { testsPassed: 0, testsTotal: 48 }, { link: "https://github.com/example/assignment1-basics", note: "在 molab 上开了 GPU 环境，本机 Mac 也能跑测试。最想弄懂：为什么 RoPE 比绝对位置编码好。" });
-  hand("demo-mia", 0, 2 * DAY, { testsPassed: 0, testsTotal: 48 }, { link: "https://github.com/example/cs336-a1", note: "本机跑测试，训练打算用 molab。最想弄懂 FlashAttention。" });
   hand("demo-lin", 1, -DAY / 2, { testsPassed: 3, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) }, { link: "https://github.com/example/assignment1-basics/commit/abc123", note: "BPE 训练一开始要 20 分钟，改成只更新受影响的 pair 之后 TinyStories 大概 90 秒。最长的 token 是 \" accomplishment\"。" });
   const fb = hand("demo-mia", 1, DAY, { testsPassed: 2, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) - DAY }, { note: "test_train_bpe_speed 还没过，pre-tokenization 用了多进程但合并那步还是慢。" });
   feedback.push({ id: uid(), submissionId: fb.id, userId: "demo-mia", authorId: ME, createdAt: fb.firstSubmittedAt + 6 * HOUR,
     text: "预分词用多进程是对的方向，做得好的是你已经把语料按特殊 token 切块了。\n\n还没过速度测试，最可能的原因是每次合并之后重新统计了所有 pair。建议：维护 pair → 计数 和 pair → 出现在哪些词里 两张表，合并时只更新受影响的词。" });
-  return { cohorts: [cohort], members, subs, details, feedback };
+  return { cohorts: [cohort], members, subs, details, feedback, tests: seedTests(cohort) };
+}
+
+/** the classmates' test runs so far: Lin is into the Transformer, Mia still fights BPE speed */
+function seedTests(cohort: Cohort): TestResults[] {
+  const repo = CS336.milestones[1].repo;
+  const at = (mi: number, d: number) => milestoneDue(cohort, CS336.milestones[mi], null) + d;
+  const run = (userId: UserId, first: number, lit: [string, number][]): TestResults => {
+    // every A1 test reported, failing, except the ones behind the stars already lit
+    const results: Record<string, number | false> = {};
+    for (const k of Object.keys(fakeResults(CS336, repo, new Set()))) results[k] = false;
+    for (const [sid, t] of lit) for (const [k, ok] of Object.entries(fakeResults(CS336, repo, new Set([sid])))) if (ok) results[k] = t;
+    const passed = Object.values(results).filter((x) => x !== false).length;
+    return { cohortId: cohort.id, userId, results, firstRunAt: first, updatedAt: Math.max(first, ...lit.map((x) => x[1])), runs: 9, lastPassed: passed, lastFailed: Object.keys(results).length - passed };
+  };
+  return [
+    run("demo-lin", at(0, -5 * DAY), [
+      ["cs336-a1-bpe/bpe", at(1, -2 * DAY)], ["cs336-a1-bpe/tok", at(1, -DAY)], ["cs336-a1-bpe/bpe-fast", at(1, DAY / 2)],
+      ["cs336-a1-model/linear", Date.now() - 2 * DAY], ["cs336-a1-model/embed", Date.now() - 2 * DAY], ["cs336-a1-model/rmsnorm", Date.now() - DAY], ["cs336-a1-model/rope", Date.now() - 3 * 3600_000],
+    ]),
+    run("demo-mia", at(0, -2 * DAY), [
+      ["cs336-a1-bpe/bpe", at(1, -DAY)], ["cs336-a1-bpe/tok", at(1, -DAY / 2)], ["cs336-a1-model/linear", Date.now() - DAY],
+    ]),
+  ];
 }
 
 export function createDemoBackend(): Backend {
@@ -346,12 +367,14 @@ export function createDemoBackend(): Backend {
     db.subjects.forEach((x) => { if (x.userId === ME && (x.name === "线性代数" || x.name === "英语阅读")) x.folderId = f.id; });
   }
   if (!db.tx) db.tx = seedTongxiu(db);
+  if (!db.tx.tests) db.tx.tests = seedTests(db.tx.cohorts[0]);
   // R-020: older demo data has no pages yet
   db.profiles.forEach((p) => { if (p.page === undefined) p.page = demoPage(p.id, p.tz); });
   save();
   const fr = () => db.profiles.filter((p) => p.id !== ME);
   const txSubs = new Set<{ ids: Set<string>; cb: (s: Submission) => void }>();
   const fbSubs = new Set<(f: SubmissionFeedback) => void>();
+  const trSubs = new Set<{ ids: Set<string>; cb: (t: TestResults) => void }>();
   /** R-030: the same rule as can_see_submission() in schema.sql */
   const txCanSee = (submissionId: string) => {
     const x = db.tx!.subs.find((s) => s.id === submissionId);
@@ -796,6 +819,22 @@ export function createDemoBackend(): Backend {
     },
     subscribeSubmissions(cohortIds, cb) { const x = { ids: new Set(cohortIds), cb }; txSubs.add(x); return () => { txSubs.delete(x); }; },
     subscribeFeedback(_me, cb) { fbSubs.add(cb); return () => { fbSubs.delete(cb); }; },
+    getReportToken: async (cohortId) => delay("demo-" + cohortId),
+    listTestResults: async (ids) => delay(db.tx!.tests!.filter((t) => ids.includes(t.cohortId)).map((t) => ({ ...t, results: { ...t.results } }))),
+    subscribeTestResults(ids, cb) { const x = { ids: new Set(ids), cb }; trSubs.add(x); return () => { trSubs.delete(x); }; },
+    async simulateReport(cohortId, res) {
+      const now = Date.now();
+      let t = db.tx!.tests!.find((x) => x.cohortId === cohortId && x.userId === ME);
+      if (!t) { t = { cohortId, userId: ME, results: {}, firstRunAt: now, updatedAt: now, runs: 0, lastPassed: 0, lastFailed: 0 }; db.tx!.tests!.push(t); }
+      let p = 0, f = 0;
+      for (const [k, ok] of Object.entries(res)) {
+        if (ok) { p++; if (typeof t.results[k] !== "number") t.results[k] = now; } else { f++; t.results[k] = false; }
+      }
+      Object.assign(t, { updatedAt: now, runs: t.runs + 1, lastPassed: p, lastFailed: f });
+      save();
+      const out = { ...t, results: { ...t.results } };
+      trSubs.forEach((x) => x.ids.has(cohortId) && x.cb(out));
+    },
     isStaff: async () => delay(true),
     listFeedbackRequests: async () => delay(db.tx!.subs.filter((s) => s.feedbackRequestedAt != null).sort((a, b) => b.feedbackRequestedAt! - a.feedbackRequestedAt!).map((s) => ({ ...s }))),
     async addFeedback({ submissionId, userId, text: raw }) {

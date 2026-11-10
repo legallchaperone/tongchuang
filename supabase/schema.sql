@@ -589,6 +589,91 @@ create policy "feedback write staff" on public.submission_feedback for insert wi
 drop policy if exists "feedback delete staff" on public.submission_feedback;
 create policy "feedback delete staff" on public.submission_feedback for delete using (public.is_staff());
 
+-- 自动对作业：在终端里跑测试，结果上报到这里，测试过了星星自己亮。
+-- 每人每期一个上报码（只有自己看得到），写在上报命令的链接里。上报只能通过 report_tests()，它认上报码、不认登录。
+create table if not exists public.report_tokens (
+  token uuid primary key default gen_random_uuid(),
+  cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (cohort_id, user_id)
+);
+alter table public.report_tokens enable row level security;
+drop policy if exists "report tokens own" on public.report_tokens;
+create policy "report tokens own" on public.report_tokens for select using (user_id = auth.uid());
+
+-- 我在这一期的上报码，没有就建一个
+create or replace function public.my_report_token(c uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare t uuid;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  if not exists (select 1 from cohort_members where cohort_id = c and user_id = auth.uid() and left_at is null) then raise exception 'not in cohort'; end if;
+  select token into t from report_tokens where cohort_id = c and user_id = auth.uid();
+  if t is null then
+    insert into report_tokens(cohort_id, user_id) values (c, auth.uid()) on conflict (cohort_id, user_id) do nothing;
+    select token into t from report_tokens where cohort_id = c and user_id = auth.uid();
+  end if;
+  return t;
+end $$;
+
+-- 每人每期一行，所有跑过的测试合在一起：测试名 → 第一次通过的时间（字符串），或者 false（现在没过）
+create table if not exists public.test_results (
+  cohort_id uuid not null references public.cohorts(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  results jsonb not null default '{}'::jsonb,
+  runs integer not null default 0,
+  last_passed integer not null default 0,
+  last_failed integer not null default 0,
+  first_run_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (cohort_id, user_id)
+);
+alter table public.test_results enable row level security;
+drop policy if exists "test results read" on public.test_results;
+create policy "test results read" on public.test_results for select using (public.in_cohort_room(cohort_id) or public.is_staff());
+
+-- res: {"assignment1-basics|tests/test_model.py::test_rope": true, ...}。返回这一期的课程、上报前后的结果，给上报接口在终端里打印点亮了哪些星星
+create or replace function public.report_tests(t uuid, res jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  tok report_tokens; c cohorts; before jsonb; cur jsonb; k text; v jsonb; p int := 0; f int := 0; n int;
+begin
+  select * into tok from report_tokens where token = t;
+  if tok.token is null then raise exception 'bad token'; end if;
+  if not exists (select 1 from cohort_members where cohort_id = tok.cohort_id and user_id = tok.user_id and left_at is null) then raise exception 'not in cohort'; end if;
+  if jsonb_typeof(res) is distinct from 'object' then raise exception 'bad results'; end if;
+  select count(*) into n from jsonb_object_keys(res);
+  if n = 0 then raise exception 'no tests'; end if;
+  if n > 5000 then raise exception 'too many tests'; end if;
+  select * into c from cohorts where id = tok.cohort_id;
+  select results into before from test_results where cohort_id = tok.cohort_id and user_id = tok.user_id;
+  before := coalesce(before, '{}'::jsonb);
+  cur := before;
+  for k, v in select * from jsonb_each(res) loop
+    if char_length(k) > 300 then continue; end if;
+    if v = 'true'::jsonb then
+      p := p + 1;
+      if jsonb_typeof(cur -> k) is distinct from 'string' then cur := cur || jsonb_build_object(k, to_jsonb(now())); end if;
+    else
+      f := f + 1;
+      cur := cur || jsonb_build_object(k, false);
+    end if;
+  end loop;
+  insert into test_results(cohort_id, user_id, results, runs, last_passed, last_failed)
+    values (tok.cohort_id, tok.user_id, cur, 1, p, f)
+    on conflict (cohort_id, user_id) do update
+    set results = excluded.results, runs = test_results.runs + 1, last_passed = p, last_failed = f, updated_at = now();
+  return jsonb_build_object('course', c.course_id, 'cohort', c.id, 'starts_on', c.starts_on, 'user', tok.user_id,
+    'before', before, 'after', cur, 'passed', p, 'failed', f);
+end $$;
+revoke all on function public.report_tests(uuid, jsonb) from public;
+grant execute on function public.report_tests(uuid, jsonb) to anon, authenticated;
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.test_results; exception when others then null; end;
+end $$;
+
 -- 开发者要看到提交人的名字（可能不和他们在同一个自习室）
 drop policy if exists "profiles staff read" on public.profiles;
 create policy "profiles staff read" on public.profiles for select using (public.is_staff());

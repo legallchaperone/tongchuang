@@ -2,7 +2,7 @@
 // R-030 同修: loading cohorts and one cohort's submissions. Kept out of the app store: only the 同修 pages need it.
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "./store";
-import type { Cohort, CohortMember, Submission, SubmissionDetail, SubmissionFeedback } from "./types";
+import type { Cohort, CohortMember, Submission, SubmissionDetail, SubmissionFeedback, TestResults } from "./types";
 
 export function useCohorts() {
   const app = useApp();
@@ -27,6 +27,7 @@ export function useCohortWork(cohortId: string | null) {
   const [subs, setSubs] = useState<Submission[] | null>(null);
   const [details, setDetails] = useState<Record<string, SubmissionDetail>>({});
   const [feedback, setFeedback] = useState<SubmissionFeedback[]>([]);
+  const [tests, setTests] = useState<Record<string, TestResults>>({});
   const [error, setError] = useState<string | null>(null);
 
   const loadContent = useCallback(async (ids: string[]) => {
@@ -39,8 +40,12 @@ export function useCohortWork(cohortId: string | null) {
   const reload = useCallback(async () => {
     if (!cohortId) return;
     try {
-      const ss = await app.backend.listSubmissions([cohortId]);
+      const [ss, ts] = await Promise.all([
+        app.backend.listSubmissions([cohortId]),
+        app.backend.listTestResults([cohortId]).catch(() => [] as TestResults[]),
+      ]);
       setSubs(ss); setError(null);
+      setTests(Object.fromEntries(ts.map((t) => [t.userId, t])));
       await loadContent(ss.map((s) => s.id));
     } catch (e) { setError((e as Error).message); setSubs((s) => s || []); }
   }, [app.backend, cohortId, loadContent]);
@@ -51,9 +56,10 @@ export function useCohortWork(cohortId: string | null) {
     const off = app.backend.subscribeSubmissions([cohortId], (s) => {
       setSubs((l) => [...(l || []).filter((x) => x.id !== s.id), s]);
     });
+    const offT = app.backend.subscribeTestResults([cohortId], (t) => setTests((m) => ({ ...m, [t.userId]: t })));
     // a deadline passing makes classmates' work readable: look again every few minutes
     const t = setInterval(() => { if (document.visibilityState === "visible") reload(); }, 5 * 60_000);
-    return () => { off(); clearInterval(t); };
+    return () => { off(); offT(); clearInterval(t); };
   }, [app.backend, cohortId, reload]);
 
   useEffect(() => {
@@ -62,7 +68,7 @@ export function useCohortWork(cohortId: string | null) {
   }, [app.backend, app.me]);
 
   return {
-    subs, details, feedback, error, reload, loadContent,
+    subs, details, feedback, tests, error, reload, loadContent,
     /** after I save: my row and its content, without waiting for realtime */
     put(s: Submission, d: SubmissionDetail) {
       setSubs((l) => [...(l || []).filter((x) => x.id !== s.id), s]);

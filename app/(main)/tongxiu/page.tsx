@@ -44,7 +44,7 @@ export default function TongxiuPage() {
   return (
     <div className="page">
       <div className="pagehead">
-        <div><h1>同修</h1><p className="sub">和同窗一起修一门课：按周的进度，按时交作业，交了有反馈，看得到彼此学到哪了。</p></div>
+        <div><h1>同修</h1><p className="sub">和同窗一起修一门课：每周一步，在终端里跑一条命令，测试过了星星就自己亮，大家实时看得到彼此到哪了。</p></div>
         {staff && <Link className="btn" href="/tongxiu/staff">写反馈（开发者）</Link>}
       </div>
 
@@ -74,7 +74,7 @@ export default function TongxiuPage() {
               <h2>{c.name}</h2>
               <p>{c.title}</p>
               <p className="muted">{c.summary}</p>
-              <div className="foot"><span>{c.weeks} 周 · {c.milestones.length} 次要交</span><span>{c.hoursPerWeek.split("，")[0]}</span></div>
+              <div className="foot"><span>{c.weeks} 周 · {c.milestones.reduce((a, m) => a + (m.stars?.length || 0), 0)} 颗星</span><span>{c.hoursPerWeek.split("，")[0]}</span></div>
             </Link>
           ))}
         </div>

@@ -12,6 +12,13 @@ export const KIND_LABEL: Record<MilestoneKind, string> = {
 
 export interface Link { label: string; url: string }
 
+/**
+ * A star lights up by itself when the tests behind it pass (the learner's test run is reported automatically).
+ * `tests` entries: a test function name ("test_rope"), a test file ("test_model.py"),
+ * "*" (any test of the step's repo ran, passed or not) or "**" (every test of the step's repo passed).
+ */
+export interface Star { id: string; label: string; tests: string[] }
+
 export interface Milestone {
   /** stable id, stored with every submission: never rename one that a cohort may already use */
   id: string;
@@ -27,7 +34,11 @@ export interface Milestone {
   summary: string;
   /** what to hand in */
   deliverables: string[];
-  /** the command that runs the official tests; the learner pastes its last lines */
+  /** the official assignment repository this step works in (what the setup commands clone) */
+  repo?: string;
+  /** small wins inside the step; when all are lit, the step counts as done (no need to hand anything in) */
+  stars?: Star[];
+  /** the command that runs the official tests, for steps without stars (filled in by hand) */
   tests?: { cmd: string; hint?: string };
   /** a number worth comparing, e.g. a validation loss */
   metric?: { name: string; lowerIsBetter: boolean };

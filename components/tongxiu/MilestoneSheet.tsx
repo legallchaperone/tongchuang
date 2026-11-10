@@ -4,17 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import type { Course, Milestone } from "@/lib/courses";
 import { KIND_LABEL } from "@/lib/courses";
-import type { Cohort, CohortMember, Submission, SubmissionDetail, SubmissionFeedback } from "@/lib/types";
+import type { Cohort, CohortMember, Submission, SubmissionDetail, SubmissionFeedback, TestResults } from "@/lib/types";
 import {
-  dueAt, dueDay, EXTENSION_DAYS, isLate, keyLabel, leftLabel, LINK_MAX, localDeadline, MAX_EXTENSIONS, NOTE_MAX, parsePytest,
+  dueAt, dueDay, EXTENSION_DAYS, stepStatus, isLate, keyLabel, leftLabel, LINK_MAX, localDeadline, MAX_EXTENSIONS, NOTE_MAX, parsePytest,
 } from "@/lib/tongxiu";
 import { ago } from "@/lib/time";
 import { Avatar } from "@/components/bits";
 import { IClose } from "@/components/Icons";
+import { RunTests } from "./RunTests";
+import { Stars } from "./Schedule";
 
-export function MilestoneSheet({ course, cohort, m, me, members, subs, details, feedback, onSaved, onExtensions, onClose }: {
+export function MilestoneSheet({ course, cohort, m, me, members, subs, details, feedback, tests, onSaved, onExtensions, onClose }: {
   course: Course; cohort: Cohort; m: Milestone; me: CohortMember | null; members: CohortMember[];
-  subs: Submission[]; details: Record<string, SubmissionDetail>; feedback: SubmissionFeedback[];
+  subs: Submission[]; details: Record<string, SubmissionDetail>; feedback: SubmissionFeedback[]; tests: Record<string, TestResults>;
   onSaved: (s: Submission, d: SubmissionDetail) => void; onExtensions: (ids: string[]) => Promise<void>; onClose: () => void;
 }) {
   const app = useApp();
@@ -25,6 +27,8 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
   const due = dueAt(cohort, m, me);
   const extended = !!me?.extensions.includes(m.id);
   const cardsLeft = MAX_EXTENSIONS - (me?.extensions.length || 0);
+  const myStep = stepStatus(cohort, m, me, mySub, me ? tests[me.userId] : undefined, now);
+  const hasStars = !!m.stars?.length;
 
   const [link, setLink] = useState(myDetail?.link || "");
   const [note, setNote] = useState(myDetail?.note || "");
@@ -105,23 +109,42 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
           <p>{m.summary}</p>
           <h3>要交</h3>
           <ul>{m.deliverables.map((d) => <li key={d}>{d}</li>)}</ul>
-          {m.tests && <p>测试：<code>{m.tests.cmd}</code>{m.tests.hint ? <span className="muted">（{m.tests.hint}）</span> : null}</p>}
-          {m.gpu === "required" && <p className="muted">这一步需要 NVIDIA GPU，可以用 molab 的免费 GPU。</p>}
+          {m.tests && !hasStars && <p>测试：<code>{m.tests.cmd}</code>{m.tests.hint ? <span className="muted">（{m.tests.hint}）</span> : null}</p>}
+          {m.gpu === "required" && <p className="muted">这一步需要 NVIDIA GPU。</p>}
           {m.offCampus && <p className="tx-off">校外自学：{m.offCampus}</p>}
           {m.links?.length ? <div className="chips">{m.links.map((l) => <a key={l.url} className="chip" href={l.url} target="_blank" rel="noreferrer">{l.label}</a>)}</div> : null}
         </div>
 
+        {hasStars && (
+          <section className="tx-form">
+            <div className="tx-form-head">
+              <h2>星星</h2>
+              <Stars lit={me && !me.leftAt ? myStep.lit : 0} total={myStep.total} />
+              {me && !me.leftAt && myStep.doneAt != null && <span className="state-pill focus">{myStep.state === "late" ? "完成了（晚了）" : "完成了"}</span>}
+            </div>
+            <div className="tx-starlist">
+              {myStep.stars.map((x) => (
+                <span key={x.star.id} className={`tx-star ${me && !me.leftAt && x.lit ? "on" : ""}`} title={x.star.tests.filter((t) => !t.startsWith("*")).join("、") || "跑一次测试"}>
+                  {me && !me.leftAt && x.lit ? "★" : "☆"} {x.star.label}
+                </span>
+              ))}
+            </div>
+            {me && !me.leftAt && myStep.doneAt == null && <RunTests course={course} cohort={cohort} step={m} mine={tests[me.userId]} compact />}
+          </section>
+        )}
+
         {me && !me.leftAt ? (
           <section className="tx-form">
             <div className="tx-form-head">
-              <h2>{mySub ? (isLate(mySub) ? "我交的（迟交）" : "我交的") : "交作业"}</h2>
+              <h2>{mySub ? (isLate(mySub) ? "我交的（迟交）" : "我交的") : hasStars ? "写点什么（可选）" : "交作业"}</h2>
               {mySub && <span className="muted">第一次交于 {ago(mySub.firstSubmittedAt, now)}{mySub.updatedAt - mySub.firstSubmittedAt > 60_000 ? ` · 改于 ${ago(mySub.updatedAt, now)}` : ""}</span>}
             </div>
             <div className="field">
-              <label className="label" htmlFor="tx-link">链接（仓库、commit、报告、molab 笔记本）</label>
+              <label className="label" htmlFor="tx-link">链接（仓库、commit、报告）</label>
               <input id="tx-link" className="input" value={link} maxLength={LINK_MAX} placeholder="https://github.com/…" onChange={(e) => setLink(e.target.value)} disabled={busy} />
             </div>
-            {m.tests && (
+            {hasStars && !mySub && <p className="muted">星星全亮就算完成，这里不填也行。想要反馈、或者想给同修看看你的实验和想法，就写在这里。</p>}
+            {m.tests && !hasStars && (
               <div className="field">
                 <label className="label" htmlFor="tx-pytest">测试结果：把 pytest 最后一行贴进来，会自动数</label>
                 <textarea id="tx-pytest" className="textarea" rows={2} value={pytest} placeholder="==== 46 passed, 2 failed in 3.21s ====" onChange={(e) => setPytest(e.target.value)} disabled={busy} style={{ minHeight: 48 }} />
@@ -147,7 +170,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
             <label className="tx-check"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} disabled={busy} /> 截止后也只给自己看（同修们只看得到交没交、测试数）</label>
             {err && <p className="td-err">{err}</p>}
             <div className="tx-actions">
-              <button className="btn primary" onClick={save} disabled={busy}>{busy ? "正在交…" : mySub ? "更新" : now > due ? "交上去（迟交）" : "交上去"}</button>
+              <button className="btn primary" onClick={save} disabled={busy}>{busy ? "正在保存…" : mySub ? "更新" : hasStars ? "保存" : now > due ? "交上去（迟交）" : "交上去"}</button>
               <button className="btn ghost" onClick={addTodo} disabled={busy}>加到待办</button>
               {!mySub && !extended && cardsLeft > 0 && (
                 <button className="btn ghost" disabled={busy} onClick={async () => {
@@ -176,17 +199,20 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
             const s = subs.find((y) => y.userId === x.userId && y.milestoneId === m.id);
             const d = s ? details[s.id] : undefined;
             const fb = s ? feedback.filter((f) => f.submissionId === s.id) : [];
+            const ps = stepStatus(cohort, m, x, s, tests[x.userId], now);
             return (
               <div key={x.userId} className="tx-peer">
                 <div className="tx-peer-head">
                   <Avatar p={p} size={22} showSky={false} /><b>{p?.name || "同窗"}</b>
+                  {hasStars && <Stars lit={ps.lit} total={ps.total} />}
+                  {ps.doneAt != null && !s && <span className="muted">{ps.state === "late" ? "完成了（晚了）" : "完成了"}</span>}
                   {s ? (
                     <span className="muted">
                       {isLate(s) ? "迟交 · " : ""}{ago(s.firstSubmittedAt, now)}交的
                       {s.testsTotal ? ` · 测试 ${s.testsPassed ?? 0}/${s.testsTotal}` : ""}
                       {s.metric != null ? ` · ${m.metric?.name || "指标"} ${s.metric}` : ""}
                     </span>
-                  ) : <span className="muted">还没交{x.extensions.includes(m.id) ? "（用了缓交卡）" : ""}</span>}
+                  ) : ps.doneAt == null ? <span className="muted">{hasStars ? "还在点星星" : "还没交"}{x.extensions.includes(m.id) ? "（用了缓交卡）" : ""}</span> : null}
                 </div>
                 {s && d && (
                   <div className="tx-peer-body">

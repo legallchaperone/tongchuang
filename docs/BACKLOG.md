@@ -58,7 +58,7 @@
 
 ## 已完成（摘要，详见 CHANGELOG）
 
-- v1.11.0：R-030 同修（一起修一门课；第一门是 CS336，16 周；截止按地球上最晚的时区；缓交卡；进度格子；开发者用 Claude 手动写反馈）。设计见 [research/study-together-courses.md](research/study-together-courses.md)
+- v1.11.0：R-030 同修（一起修一门课；第一门是 CS336，16 周；终端跑测试自动上报、过了的测试点亮星星；同修榜；“今天”页卡片；截止按地球上最晚的时区；缓交卡；开发者用 Claude 手动写反馈）。设计见 [research/study-together-courses.md](research/study-together-courses.md)
 - v1.10.4～1.10.5：R-029 专注中发笔记（一条条发，结束时一起带进记录；专注度仍在结束时选）
 - v1.10.3：R-028 忘了结束的专注：开着或暂停超过 8 小时自动取消（不记录）；同窗那边超过 8 小时的计时不再显示
 - v1.10.2：R-027 点赞和评论只给共同同窗看（像朋友圈）
@@ -90,11 +90,12 @@
 
 ## v1.11 留下的已知问题（以后顺手修）
 
-- 同修的“交了作业”还没进动态，只有页面在线时弹提醒；进度格子没有键盘以外的放大查看。
+- 同修的星星和完成还没进动态，只有页面开着时弹提醒。
 - 课程只能由开发者写进 `lib/courses/`，改了里程碑的 id 会让已经交的作业对不上，改之前先看有没有人在修。
 - “迟交”看的是数据库记的第一次提交时间和提交里存的截止时间；截止时间由前端算好写入，同修是朋友之间用的，没有在数据库里再校验。
 - 开发者在 Supabase SQL Editor 里手动加：`insert into public.staff(user_id) select id from auth.users where email = '...'`。
-- 同修的 CS336 作业改成 marimo 笔记本：见 [research/study-together-courses.md](research/study-together-courses.md) 第六节，还没做。
+- 星星对应的测试名是照官方仓库 2026 春季版核对的；课程仓库更新后要重新核对（每颗星至少要能对上一个测试，否则永远亮不了）。
+- 上报命令需要 macOS / Linux 的终端（Windows 用 WSL）。还没做“push 到 GitHub 自动上报”（GitHub Actions），需要 GPU 的测试在 Actions 上也跑不了。
 
 ## v1.5 留下的已知问题（以后顺手修）
 

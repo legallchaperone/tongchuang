@@ -256,3 +256,20 @@ export interface SubmissionFeedback {
   text: string;
   createdAt: number;
 }
+
+/**
+ * R-030: one person's reported test results in a cohort, merged over every run.
+ * results: "assignment1-basics/tests/test_model.py::test_rope" → when it first passed (epoch ms), or false (failing now).
+ */
+export interface TestResults {
+  cohortId: string;
+  userId: UserId;
+  results: Record<string, number | false>;
+  /** the first report ever (lights "测试跑起来了") */
+  firstRunAt: number;
+  updatedAt: number;
+  runs: number;
+  /** the last run: how many passed / failed */
+  lastPassed: number;
+  lastFailed: number;
+}

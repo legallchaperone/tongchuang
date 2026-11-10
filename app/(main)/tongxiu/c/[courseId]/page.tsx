@@ -70,7 +70,7 @@ export default function CoursePage() {
             </div>
           </section>
           <section className="card">
-            <div className="cardhead"><h2>按周安排</h2><span className="hint">每周一个要交的东西，截止日都是那周最后一天</span></div>
+            <div className="cardhead"><h2>按周安排</h2><span className="hint">每周一步，截止日都是那周最后一天；带 ★ 的步骤测试过了就自动完成</span></div>
             <div className="cardbody"><Schedule course={course} now={app.now} /></div>
           </section>
         </div>
@@ -108,7 +108,7 @@ export default function CoursePage() {
               <div className="field">
                 <label className="label" htmlFor="tx-start">第 1 周从哪天开始</label>
                 <input id="tx-start" className="input" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} disabled={busy} />
-                {/^\d{4}-\d{2}-\d{2}$/.test(startsOn) && <span className="muted" style={{ marginTop: 4 }}>{keyLabel(startsOn)} 开始，每周的作业在第 7 天截止</span>}
+                {/^\d{4}-\d{2}-\d{2}$/.test(startsOn) && <span className="muted" style={{ marginTop: 4 }}>{keyLabel(startsOn)} 开始，每周的那一步在第 7 天截止</span>}
               </div>
               <div className="field">
                 <label className="label" htmlFor="tx-name">这一期叫什么</label>

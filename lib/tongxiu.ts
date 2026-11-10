@@ -4,8 +4,8 @@
  * Deadlines are "Anywhere on Earth" (AoE, UTC-12): a milestone due on 12-07 closes when 12-07 has ended
  * everywhere on Earth, i.e. 12-08 12:00 UTC. Nobody, in any time zone, loses part of the last day.
  */
-import type { Course, Milestone } from "./courses";
-import type { Cohort, CohortMember, Submission } from "./types";
+import type { Course, Milestone, Star } from "./courses";
+import type { Cohort, CohortMember, Submission, TestResults } from "./types";
 import { addDaysKey, dayKey, DAY, partsIn, weekdayCn } from "./time";
 
 export const MAX_EXTENSIONS = 3;
@@ -64,22 +64,96 @@ export function courseWeek(cohort: Pick<Cohort, "startsOn">, now: number, tz: st
 export const isLate = (s: Pick<Submission, "firstSubmittedAt" | "dueAt">) => s.firstSubmittedAt > s.dueAt;
 
 export type CellState = "done" | "late" | "overdue" | "open" | "later";
-/** how one milestone looks for one person in the progress grid */
-export function cellState(due: number, sub: Submission | undefined, now: number): CellState {
-  if (sub) return isLate(sub) ? "late" : "done";
-  if (now > due) return "overdue";
-  return due - now < 8 * DAY ? "open" : "later";
-}
-export const CELL_LABEL: Record<CellState, string> = { done: "按时交了", late: "迟交", overdue: "还没交（已过截止）", open: "进行中", later: "还没开始" };
+export const CELL_LABEL: Record<CellState, string> = { done: "完成了", late: "完成了（晚了）", overdue: "还没完成（已过截止）", open: "进行中", later: "还没开始" };
 
-/** milestones I should be looking at now: not handed in, due within 8 days or already past */
-export function upcoming(course: Course, cohort: Cohort, member: CohortMember | null, mine: Submission[], now: number) {
-  const done = new Set(mine.map((s) => s.milestoneId));
+/* ── stars: lit by reported test results ── */
+
+/** "https://github.com/stanford-cs336/assignment1-basics" → "assignment1-basics" */
+export const repoName = (url?: string) => (url ? url.replace(/\/+$/, "").split("/").pop()!.replace(/\.git$/, "") : "");
+
+/** result keys look like "assignment1-basics|tests/test_model.py::test_rope[3]" (the repo part may be missing) */
+export function splitTestKey(key: string) {
+  const bar = key.indexOf("|");
+  const repo = bar >= 0 ? key.slice(0, bar) : "";
+  const rest = bar >= 0 ? key.slice(bar + 1) : key;
+  const sep = rest.lastIndexOf("::");
+  const file = sep >= 0 ? rest.slice(0, sep) : "";
+  const name = (sep >= 0 ? rest.slice(sep + 2) : rest).replace(/\[.*$/, "");
+  return { repo, file, name };
+}
+
+function matches(key: string, pattern: string, repo: string) {
+  const k = splitTestKey(key);
+  if (pattern === "*" || pattern === "**") return !!repo && k.repo === repo;
+  if (pattern.endsWith(".py")) return k.file === pattern || k.file.endsWith("/" + pattern);
+  return k.name === pattern;
+}
+
+export interface StarState { star: Star; lit: boolean; at: number | null }
+
+export function starStates(m: Milestone, tr: TestResults | undefined): StarState[] {
+  const repo = repoName(m.repo);
+  return (m.stars || []).map((star) => {
+    if (!tr) return { star, lit: false, at: null };
+    const keys = Object.keys(tr.results).filter((k) => star.tests.some((p) => matches(k, p, repo)));
+    if (star.tests.includes("*")) return { star, lit: keys.length > 0, at: keys.length ? tr.firstRunAt : null };
+    const lit = keys.length > 0 && keys.every((k) => typeof tr.results[k] === "number");
+    return { star, lit, at: lit ? Math.max(...keys.map((k) => tr.results[k] as number)) : null };
+  });
+}
+
+export interface StepStatus {
+  state: CellState; due: number; doneAt: number | null; stars: StarState[]; lit: number; total: number;
+  /** 0..1, for the partly filled square */
+  frac: number;
+}
+
+/** where one person stands on one step: handed in by hand, or every star lit (whichever came first) */
+export function stepStatus(cohort: Pick<Cohort, "startsOn">, m: Milestone, member: (Pick<CohortMember, "extensions"> & { joinedAt?: number }) | null | undefined,
+  sub: Submission | undefined, tr: TestResults | undefined, now: number): StepStatus {
+  const due = dueAt(cohort, m, member);
+  const stars = starStates(m, tr);
+  const lit = stars.filter((x) => x.lit).length;
+  const starsAt = stars.length && lit === stars.length ? Math.max(...stars.map((x) => x.at || 0)) : null;
+  const times = [sub?.firstSubmittedAt, starsAt].filter((x): x is number => x != null);
+  const doneAt = times.length ? Math.min(...times) : null;
+  // a step that was already due when someone joined is never "late" for them
+  const late = doneAt != null && doneAt > due && !(member?.joinedAt && member.joinedAt > due);
+  const joinedLate = !!(member?.joinedAt && member.joinedAt > due);
+  const state: CellState = doneAt != null ? (late ? "late" : "done") : now > due ? (joinedLate ? "open" : "overdue") : due - now < 8 * DAY ? "open" : "later";
+  return { state, due, doneAt, stars, lit, total: stars.length, frac: doneAt != null ? 1 : stars.length ? lit / stars.length : 0 };
+}
+
+export const starsLit = (course: Course, tr: TestResults | undefined) =>
+  course.milestones.reduce((a, m) => a + starStates(m, tr).filter((x) => x.lit).length, 0);
+export const starsTotal = (course: Course) => course.milestones.reduce((a, m) => a + (m.stars?.length || 0), 0);
+
+/** steps I should be looking at now: not done, due within 8 days or already past */
+export function upcoming(course: Course, cohort: Cohort, member: CohortMember | null, mine: Submission[], tr: TestResults | undefined, now: number) {
   return course.milestones
-    .filter((m) => !done.has(m.id))
-    .map((m) => ({ m, due: dueAt(cohort, m, member) }))
-    .filter((x) => x.due - now < 8 * DAY)
-    .sort((a, b) => a.due - b.due);
+    .map((m) => ({ m, st: stepStatus(cohort, m, member, mine.find((s) => s.milestoneId === m.id), tr, now) }))
+    .filter((x) => x.st.doneAt == null && x.st.due - now < 8 * DAY)
+    .sort((a, b) => a.st.due - b.st.due);
+}
+
+/** the step to show first: the earliest one not done yet */
+export function currentStep(course: Course, cohort: Cohort, member: CohortMember | null, mine: Submission[], tr: TestResults | undefined, now: number) {
+  const order = [...course.milestones].sort((a, b) => dueAt(cohort, a, member) - dueAt(cohort, b, member));
+  for (const m of order) {
+    const st = stepStatus(cohort, m, member, mine.find((s) => s.milestoneId === m.id), tr, now);
+    if (st.doneAt == null) return { m, st };
+  }
+  return null;
+}
+
+/** what to paste in a terminal: get the code, run the tests, report them (the report URL carries my token) */
+export function setupCommands(origin: string, token: string, repoUrl: string | undefined) {
+  const repo = repoName(repoUrl);
+  return {
+    install: "curl -LsSf https://astral.sh/uv/install.sh | sh",
+    clone: repoUrl ? `git clone ${repoUrl}.git && cd ${repo}` : "",
+    report: `uv run pytest --junitxml=/tmp/tongxiu.xml; curl -sS --data-binary @/tmp/tongxiu.xml "${origin}/api/tongxiu/report?t=${token}&repo=$(basename "$PWD")"`,
+  };
 }
 
 /**
@@ -139,4 +213,25 @@ export function nextMonday(now: number, tz: string) {
   const [y, mo, d] = key.split("-").map(Number);
   const wd = new Date(Date.UTC(y, mo - 1, d, 12)).getUTCDay();
   return addDaysKey(key, ((8 - wd) % 7) || 7);
+}
+
+/**
+ * Demo only: test results as if the step's repo had been run, with these stars ("milestoneId/starId") passing.
+ * Real reports carry the real test names; these are just enough to light the right stars.
+ */
+export function fakeResults(course: Course, repoUrl: string | undefined, pass: Set<string>): Record<string, boolean> {
+  const repo = repoName(repoUrl);
+  const out: Record<string, boolean> = {};
+  for (const m of course.milestones) {
+    if (repoName(m.repo) !== repo) continue;
+    for (const star of m.stars || []) {
+      const ok = pass.has(`${m.id}/${star.id}`);
+      for (const p of star.tests) {
+        if (p === "*") continue;
+        const key = p === "**" ? `${repo}|tests/test_all.py::test_${star.id}` : p.endsWith(".py") ? `${repo}|tests/${p}::test_${star.id}` : `${repo}|tests/test_${m.short.replace(/\W/g, "")}.py::${p}`;
+        out[key] = ok;
+      }
+    }
+  }
+  return out;
 }

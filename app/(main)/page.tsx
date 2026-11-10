@@ -15,6 +15,7 @@ import { StatusButton } from "@/components/Status";
 import { WrapButton, YesterdayNote } from "@/components/Wrap";
 import { ShareDayButton } from "@/components/DayShare";
 import { TodoCard } from "@/components/Todos";
+import { TongxiuTodayCard } from "@/components/tongxiu/TodayCard";
 import type { Todo } from "@/lib/types";
 
 function greeting(h: number) {
@@ -124,6 +125,8 @@ export default function TodayPage() {
               </>
             )}
           </section>
+
+          <TongxiuTodayCard style={{ order: 2 }} />
 
           <TodoCard busy={!!focusing} onPick={(todo) => setPick((p) => ({ todo, n: (p?.n || 0) + 1 }))} />
 

@@ -1,4 +1,4 @@
-import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, TestResults, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 
 export type Unsub = () => void;
 
@@ -136,6 +136,13 @@ export interface Backend {
   isStaff(): Promise<boolean>;
   /** staff only: every submission that asked for feedback, newest first */
   listFeedbackRequests(): Promise<Submission[]>;
+  /** my personal report code for this cohort (made on first use); it goes into the test-report command */
+  getReportToken(cohortId: string): Promise<string>;
+  listTestResults(cohortIds: string[]): Promise<TestResults[]>;
+  /** realtime: someone's test results changed (a report came in) */
+  subscribeTestResults(cohortIds: string[], cb: (t: TestResults) => void): Unsub;
+  /** demo only: pretend my terminal just reported these results */
+  simulateReport?(cohortId: string, results: Record<string, boolean>): Promise<void>;
   /** staff only */
   addFeedback(f: { submissionId: string; userId: UserId; text: string }): Promise<SubmissionFeedback>;
 }

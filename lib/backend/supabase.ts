@@ -1,6 +1,6 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import type { Backend, Unsub } from "./types";
-import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
+import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos, SessionComment, Submission, SubmissionDetail, SubmissionFeedback, SubjectFolder, TestResults, Todo, LiveStatus, Profile, Room, Session, Signal, Subject, UserId } from "../types";
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
 import { checkTodo, TODO_MISSING } from "../todos";
@@ -625,6 +625,27 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       if (error) throw txError(error);
       return (data as any[]).map(toSubmission);
     },
+    async getReportToken(cohortId) {
+      const { data, error } = await sb.rpc("my_report_token", { c: cohortId });
+      if (error) throw txError(error);
+      return String(data);
+    },
+    async listTestResults(cohortIds) {
+      if (!cohortIds.length) return [];
+      const { data, error } = await sb.from("test_results").select("*").in("cohort_id", cohortIds);
+      if (error) throw txError(error);
+      return (data as any[]).map(toTestResults);
+    },
+    subscribeTestResults(cohortIds, cb) {
+      const set = new Set(cohortIds);
+      if (!set.size) return () => {};
+      const ch = sb.channel("tests-" + Math.random().toString(36).slice(2))
+        .on("postgres_changes", { event: "*", schema: "public", table: "test_results" }, (p: any) => {
+          if (p.new?.cohort_id && set.has(p.new.cohort_id)) cb(toTestResults(p.new));
+        })
+        .subscribe();
+      return () => { sb.removeChannel(ch); };
+    },
     async addFeedback(f) {
       const text = f.text.trim();
       if (!text) throw new Error("反馈是空的");
@@ -717,10 +738,18 @@ const toFeedback = (r: any): SubmissionFeedback => ({
 /** R-030: the usual failures in plain Chinese */
 function txError(e: { message: string; code?: string }): Error {
   const m = e.message || "";
-  if (e.code === "42P01" || e.code === "PGRST205" || (/cohort|submission|staff/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TONGXIU_MISSING);
+  if (e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST202" || (/cohort|submission|staff|test_results|report_token/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TONGXIU_MISSING);
   if (/row-level security/i.test(m)) return new Error("没有权限：同修只对这个自习室里的人开放");
   if (/extensions_check|cardinality/.test(m)) return new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
   if (/name_check/.test(m)) return new Error("名字 1–40 个字");
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);
 }
+export const toTestResults = (r: any): TestResults => {
+  const results: Record<string, number | false> = {};
+  for (const [k, v] of Object.entries(r.results || {})) results[k] = typeof v === "string" ? Date.parse(v) : false;
+  return {
+    cohortId: r.cohort_id, userId: r.user_id, results, firstRunAt: ts(r.first_run_at) || 0, updatedAt: ts(r.updated_at) || 0,
+    runs: Number(r.runs || 0), lastPassed: Number(r.last_passed || 0), lastFailed: Number(r.last_failed || 0),
+  };
+};
