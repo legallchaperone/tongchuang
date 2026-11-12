@@ -38,6 +38,8 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
   const [metric, setMetric] = useState(mySub?.metric != null ? String(mySub.metric) : "");
   const [priv, setPriv] = useState(!!myDetail?.private);
   const [askFb, setAskFb] = useState(false);
+  /** on a step with stars, writing is optional: the form stays folded until asked for */
+  const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // the saved content arrives after the sheet opens (first load): fill the form once
@@ -133,17 +135,33 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
           </section>
         )}
 
-        {me && !me.leftAt ? (
+        {me && !me.leftAt && hasStars && !mySub && !writing ? (
+          <section className="tx-form">
+            <p className="muted">星星全亮就算完成，不用交东西。想要开发者的反馈、或者想给同修看看你的实验和想法，可以写几句。</p>
+            <div className="tx-actions">
+              <button className="btn" onClick={() => setWriting(true)}>写点什么（可选）</button>
+              <button className="btn ghost" onClick={addTodo}>加到待办</button>
+              {!extended && cardsLeft > 0 && (
+                <button className="btn ghost" onClick={async () => {
+                  try { await onExtensions([...(me.extensions || []), m.id]); app.pushToast({ title: `截止延后 ${EXTENSION_DAYS} 天`, body: `还剩 ${cardsLeft - 1} 张缓交卡`, ttl: 3500 }); }
+                  catch (e) { setErr((e as Error).message); }
+                }}>用缓交卡（晚 {EXTENSION_DAYS} 天，剩 {cardsLeft} 张）</button>
+              )}
+              {extended && <button className="btn ghost" onClick={() => onExtensions(me.extensions.filter((x) => x !== m.id)).catch((e) => setErr((e as Error).message))}>收回缓交卡</button>}
+            </div>
+            {err && <p className="td-err">{err}</p>}
+          </section>
+        ) : me && !me.leftAt ? (
           <section className="tx-form">
             <div className="tx-form-head">
-              <h2>{mySub ? (isLate(mySub) ? "我交的（迟交）" : "我交的") : hasStars ? "写点什么（可选）" : "交作业"}</h2>
+              <h2>{mySub ? (isLate(mySub) ? "我交的（迟交）" : "我交的") : hasStars ? "写点什么" : "交作业"}</h2>
+              {hasStars && !mySub && <button type="button" className="btn ghost sm" onClick={() => setWriting(false)} disabled={busy}>收起</button>}
               {mySub && <span className="muted">第一次交于 {ago(mySub.firstSubmittedAt, now)}{mySub.updatedAt - mySub.firstSubmittedAt > 60_000 ? ` · 改于 ${ago(mySub.updatedAt, now)}` : ""}</span>}
             </div>
             <div className="field">
               <label className="label" htmlFor="tx-link">链接（仓库、commit、报告）</label>
               <input id="tx-link" className="input" value={link} maxLength={LINK_MAX} placeholder="https://github.com/…" onChange={(e) => setLink(e.target.value)} disabled={busy} />
             </div>
-            {hasStars && !mySub && <p className="muted">星星全亮就算完成，这里不填也行。想要反馈、或者想给同修看看你的实验和想法，就写在这里。</p>}
             {m.tests && !hasStars && (
               <div className="field">
                 <label className="label" htmlFor="tx-pytest">测试结果：把 pytest 最后一行贴进来，会自动数</label>
