@@ -145,7 +145,7 @@ export const HAIR_STYLES: string[][] = [
 
 /* ─────────── ready-made cartoon characters ─────────── */
 // same letters as the built kid (S face/body, s shadow, E eye, p blush, B shirt, b shirt shadow, W white, P pants, F shoes, H hair)
-// plus each character's own: i inner ear, m mouth, Y shorts / tuft, O outline drawn inside the figure. The head map includes the hair; it may be taller than HEAD
+// plus each character's own: i inner ear, m mouth, Y shorts, O outline drawn inside the figure. The head map includes the hair; it may be taller than HEAD
 // (ears, a big head): the extra rows stick up above where the built kid's head starts (see liftOf).
 interface Cartoon {
   name: string;
@@ -161,51 +161,49 @@ interface Cartoon {
 const CARTOONS: Record<string, Cartoon> = {
   usagi: {
     name: "乌萨奇",
-    skin: "#f7efa2",
-    colors: { i: "#f4b4cc", p: "#f6b3cb", Y: "#f6d23c", O: OUTLINE, W: "#ffffff" },
-    // thin ears side by side with pink inside, a yellow tuft where they meet the head, a big round face taking up
-    // most of the figure, black eyes with a white shine across the top, blush at the outer cheeks, a small nose and mouth low in the middle
+    skin: "#fcebd2",
+    colors: { i: "#f5adbd", p: "#f6a6b6", O: OUTLINE, W: "#ffffff" },
+    // long thin ears with pink down the middle, head and body one big egg, arched brows over small dot eyes
+    // with a white glint, blush on the outer cheeks and a little cat mouth
     head: [
       "................",
-      ".....iS..iS.....",
-      ".....iS..iS.....",
-      ".....iS..iS.....",
-      ".....iS..iS.....",
-      ".....SS..SS.....",
-      "....YY.YY.YY....",
-      "...SYYYYYYYYS...",
-      "..SSSSSSSSSSSS..",
-      ".SSSSSSSSSSSSSS.",
-      ".SSOOSSSSSSOOSS.",
-      ".SOWWOSSSSOWWOS.",
-      ".SOOOOSSSSOOOOS.",
-      ".pSOOSSOOSSOOSp.",
-      ".ppSSSSSSSSSSpp.",
-      "..SSSSSOOSSSSS..",
+      ".....S....S.....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SSS..SSS....",
       "...SSSSSSSSSS...",
-      "....ssssssss....",
+      "..SSOOSSSSOOSS..",
+      ".SOSSSSSSSSSSOS.",
+      ".SSSSSSSSSSSSSS.",
+      ".SSSWOSSSSWOSSS.",
+      ".SSSOOSSSSOOSSS.",
+      ".SppSSSSSSSSppS.",
+      ".SSSSSOSSOSSSSS.",
+      ".SSSSSSOOSSSSSS.",
     ],
     sit: [
-      "....SSSSSSSS....",
-      "...SSSSSSSSSS...",
-      "...SSSSSSSSSS...",
-      "...sSSSSSSSSs...",
-      "...sSSSSSSSSs...",
+      "..SSSSSSSSSSSS..",
+      ".SSSSSSSSSSSSSS.",
+      "..SSSSSSSSSSSS..",
+      "..sSSSSSSSSSSs..",
+      "...ssssssssss...",
     ],
     stand: [
-      "....SSSSSSSS....",
-      "...SSSSSSSSSS...",
       "..SSSSSSSSSSSS..",
-      "..SsSSSSSSSSsS..",
-      "...sSSSSSSSSs...",
+      ".SSSSSSSSSSSSSS.",
+      ".SSSSSSSSSSSSSS.",
+      "..SSSSSSSSSSSS..",
+      "..SSSSSSSSSSSS..",
       "...SSSSSSSSSS...",
-      "....SSSSSSSS....",
-      "....SSSSSSSS....",
-      "....SSSSSSSS....",
-      "....SSS..SSS....",
-      "....SSS..SSS....",
-      "....SSS..SSS....",
-      "....sss..sss....",
+      "...sSSSSSSSSs...",
+      "....ssssssss....",
+      "....SS....SS....",
+      "....SS....SS....",
+      "....SS....SS....",
+      "....SS....SS....",
+      "....ss....ss....",
     ],
   },
   shinchan: {
