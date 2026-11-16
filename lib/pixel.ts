@@ -162,42 +162,45 @@ const CARTOONS: Record<string, Cartoon> = {
   usagi: {
     name: "乌萨奇",
     skin: "#f7efa2",
-    colors: { i: "#f4b4cc", p: "#f6b3cb", Y: "#f3cf3a", O: OUTLINE },
-    // thin ears side by side with pink inside, a yellow tuft where they meet the head, a big round face,
-    // half-shut eyes (a lid line over the pupils), blush on the cheeks and a little nose
+    colors: { i: "#f4b4cc", p: "#f6b3cb", Y: "#f6d23c", O: OUTLINE, W: "#ffffff" },
+    // thin ears side by side with pink inside, a yellow tuft where they meet the head, a big round face taking up
+    // most of the figure, half-shut eyes with white in them, blush at the outer cheeks, a small nose and mouth low in the middle
     head: [
       "................",
+      ".....iS..iS.....",
+      ".....iS..iS.....",
+      ".....iS..iS.....",
+      ".....iS..iS.....",
       ".....SS..SS.....",
-      ".....Si..iS.....",
-      ".....Si..iS.....",
-      ".....Si..iS.....",
-      ".....SS..SS.....",
-      "....YYYYYYYY....",
-      "..SSSYYYYYYSSS..",
+      "....YY.YY.YY....",
+      "...SYYYYYYYYS...",
+      "..SSSSSSSSSSSS..",
       ".SSSSSSSSSSSSSS.",
       ".SSOOOSSSSOOOSS.",
-      ".SSSEESSSSEESSS.",
-      ".SppSSSOOSSSppS.",
+      ".SOWWOSSSSOWWOS.",
+      ".pSOOOSSSSOOOSp.",
+      ".ppSSSSOOSSSSpp.",
       ".SSSSSSSSSSSSSS.",
-      "..SSSSSSSSSSSS..",
-      "...ssssssssss...",
+      "..SSSSSOOSSSSS..",
+      "...SSSSSSSSSS...",
+      "....ssssssss....",
     ],
     sit: [
+      "....SSSSSSSS....",
       "...SSSSSSSSSS...",
-      "..SSSSSSSSSSSS..",
-      "..SSSSSSSSSSSS..",
-      "..sSSSSSSSSSSs..",
-      "..sSSSSSSSSSSs..",
+      "...SSSSSSSSSS...",
+      "...sSSSSSSSSs...",
+      "...sSSSSSSSSs...",
     ],
     stand: [
+      "....SSSSSSSS....",
       "...SSSSSSSSSS...",
-      "..SSSSSSSSSSSS..",
       "..SSSSSSSSSSSS..",
       "..SsSSSSSSSSsS..",
-      "..SsSSSSSSSSsS..",
-      "..SSSSSSSSSSSS..",
+      "...sSSSSSSSSs...",
       "...SSSSSSSSSS...",
-      "...SSSSSSSSSS...",
+      "....SSSSSSSS....",
+      "....SSSSSSSS....",
       "....SSSSSSSS....",
       "....SSS..SSS....",
       "....SSS..SSS....",
@@ -628,6 +631,13 @@ function drawClosed(ctx: CanvasRenderingContext2D, o: SceneOpts) {
 /** a head-and-shoulders portrait grid for avatars */
 export function portrait(look: AvatarLook, shirt: string): Grid {
   const g = character({ look, shirt, pose: "sit" });
-  // a taller character keeps its whole head (ears included) and shows a little less of the body
-  return g.slice(0, liftOf(look) ? 16 : 15);
+  // a taller character keeps its whole head (ears included) and a little of the body; draw it with portraitFit
+  return g.slice(0, 15 + liftOf(look));
+}
+
+/** how to fit a portrait grid (after dropping its empty first row) into a square box of `box` pixels:
+ *  whole-number scale, centered across, standing on the bottom edge */
+export function portraitFit(g: Grid, box: number) {
+  const scale = Math.max(1, Math.floor(Math.min(box / 16, box / g.length)));
+  return { scale, dx: Math.floor((box - 16 * scale) / 2), dy: box - g.length * scale };
 }

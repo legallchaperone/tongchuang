@@ -10,7 +10,7 @@ import { peakLabel, peakWindow, type ProfileStats, type SubjectPart } from "./pr
 import { medalGrid, MEDAL_H, MEDAL_W } from "./badges";
 import { dayLabel, ENERGY, IMPACT } from "./review";
 import { dayKey, dur, durShort, HOUR, hhmm, hrs, weekdayCn, weekdayOfKey } from "./time";
-import { drawGrid, pick, portrait, shade, SHIRTS, type AvatarLook, type Grid } from "./pixel";
+import { drawGrid, pick, portrait, portraitFit, shade, SHIRTS, type AvatarLook, type Grid } from "./pixel";
 import {
   drawShareFooter, ensureCardFont, fit, FOOTER_H, PAL, rect, renderPixelPng, resetMeasure, sky, tag, text, textW, tile, woodFrame,
   type CardTheme, type Pal,
@@ -295,7 +295,8 @@ function layout(ctx: C, d: ProfileCardData, theme: CardTheme, glyphs: string[], 
     rect(ctx, wx + 2, wy + 2, 50, 50, p.edge);
     sky(ctx, wx + 3, wy + 3, 48, 48, p);
     const g: Grid = portrait(d.look, d.shirt).slice(1);
-    ctx.save(); ctx.translate(wx + 3, wy + 3 + 48 - g.length * 3); ctx.scale(3, 3); drawGrid(ctx, g, 0, 0); ctx.restore();
+    const pf = portraitFit(g, 48);
+    ctx.save(); ctx.translate(wx + 3 + pf.dx, wy + 3 + pf.dy); ctx.scale(pf.scale, pf.scale); drawGrid(ctx, g, 0, 0); ctx.restore();
   }
   const tx = 88, tw = W - tx - PAD;
   T(r, Fit(r, d.name, tw, 2), tx, 24, p.ink, 2);
