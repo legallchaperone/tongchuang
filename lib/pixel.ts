@@ -145,7 +145,7 @@ export const HAIR_STYLES: string[][] = [
 
 /* ─────────── ready-made cartoon characters ─────────── */
 // same letters as the built kid (S face/body, s shadow, E eye, p blush, B shirt, b shirt shadow, W white, P pants, F shoes, H hair)
-// plus each character's own: i inner ear, m/r mouth, Y shorts. The head map includes the hair; it may be taller than HEAD
+// plus each character's own: i inner ear, m mouth, Y shorts / tuft, O outline drawn inside the figure. The head map includes the hair; it may be taller than HEAD
 // (ears, a big head): the extra rows stick up above where the built kid's head starts (see liftOf).
 interface Cartoon {
   name: string;
@@ -161,33 +161,36 @@ interface Cartoon {
 const CARTOONS: Record<string, Cartoon> = {
   usagi: {
     name: "乌萨奇",
-    skin: "#fff1b8",
-    colors: { i: "#f5a3b5", m: "#5a1e14", r: "#e0605a", p: "#f7a6a6" },
-    // tall ears apart, a wide flat face with dots for eyes set far apart, blush under them and a little open mouth
+    skin: "#f7efa2",
+    colors: { i: "#f4b4cc", p: "#f6b3cb", Y: "#f3cf3a", O: OUTLINE },
+    // thin ears side by side with pink inside, a yellow tuft where they meet the head, a big round face,
+    // half-shut eyes (a lid line over the pupils), blush on the cheeks and a little nose
     head: [
       "................",
-      "....S......S....",
-      "...SSS....SSS...",
-      "...SiS....SiS...",
-      "...SiS....SiS...",
-      "...SiS....SiS...",
-      "...SSS....SSS...",
-      "...SSSSSSSSSS...",
+      ".....SS..SS.....",
+      ".....Si..iS.....",
+      ".....Si..iS.....",
+      ".....Si..iS.....",
+      ".....SS..SS.....",
+      "....YYYYYYYY....",
+      "..SSSYYYYYYSSS..",
+      ".SSSSSSSSSSSSSS.",
+      ".SSOOOSSSSOOOSS.",
+      ".SSSEESSSSEESSS.",
+      ".SppSSSOOSSSppS.",
+      ".SSSSSSSSSSSSSS.",
       "..SSSSSSSSSSSS..",
-      "..SSESSSSSSESS..",
-      "..SppSSmmSSppS..",
-      "..SSSSSrrSSSSS..",
-      "...SSSSSSSSSS...",
+      "...ssssssssss...",
     ],
     sit: [
-      "...ssssssssss...",
+      "...SSSSSSSSSS...",
       "..SSSSSSSSSSSS..",
       "..SSSSSSSSSSSS..",
       "..sSSSSSSSSSSs..",
       "..sSSSSSSSSSSs..",
     ],
     stand: [
-      "...ssssssssss...",
+      "...SSSSSSSSSS...",
       "..SSSSSSSSSSSS..",
       "..SSSSSSSSSSSS..",
       "..SsSSSSSSSSsS..",
@@ -204,25 +207,27 @@ const CARTOONS: Record<string, Cartoon> = {
   },
   shinchan: {
     name: "蜡笔小新",
-    skin: "#fbd8b8",
+    skin: "#f7cba8",
     shirt: "#e8413a",
     colors: { H: "#16131c", m: "#8a2a1e", Y: "#f5c518", y: "#d09a10", F: "#5e3218", W: "#ffffff" },
-    // a potato head: the black hair sits on top and the cheeks bulge out wider than it; thick level brows
+    // three-quarter view facing left, like most drawings of him: the black hair caps the top and the back of the head,
+    // thick brows right under it, and the potato cheek bulges out low on the left
     head: [
       "................",
       "................",
-      "......HHHH......",
-      "....HHHHHHHH....",
-      "...HHHHHHHHHH...",
-      "...HHHHHHHHHH...",
-      "...HSSSSSSSSH...",
-      "...SHHHSSHHHS...",
-      "...SHHHSSHHHS...",
-      "..SSSSSSSSSSSS..",
-      ".SSSSESSSSESSSS.",
-      ".SSSSESSSSESSSS.",
-      ".SSSSSSmmSSSSSS.",
-      "..sSSSSSSSSSSs..",
+      "................",
+      ".....HHHHHHH....",
+      "....HHHHHHHHH...",
+      "....HHHHHHHHHH..",
+      "....SSSSSHHHHH..",
+      "...SHHSHHSSHHH..",
+      "...SHHSHHSSSHH..",
+      "..SSSSSSSSSSSH..",
+      ".SSSESSESSSSSS..",
+      ".SSSESSESSSSS...",
+      ".SpSSSSSSSSSs...",
+      ".SSSSmSSSSSs....",
+      "..sSSSSSSss.....",
     ],
     sit: [
       "....BBBBBBBB....",
