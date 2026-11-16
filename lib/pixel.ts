@@ -146,7 +146,7 @@ export const HAIR_STYLES: string[][] = [
 /* ─────────── ready-made cartoon characters ─────────── */
 // same letters as the built kid (S face/body, s shadow, E eye, p blush, B shirt, b shirt shadow, W white, P pants, F shoes, H hair)
 // plus each character's own: i inner ear, m mouth, Y shorts, O outline drawn inside the figure. The head map includes the hair; it may be taller than HEAD
-// (ears, a big head): the extra rows stick up above where the built kid's head starts (see liftOf).
+// (ears, a big head) and its body shorter; liftOf lines its feet / seat up with the built kid's.
 interface Cartoon {
   name: string;
   /** face / body color; also the hands at the desk */
@@ -163,8 +163,8 @@ const CARTOONS: Record<string, Cartoon> = {
     name: "乌萨奇",
     skin: "#fcebd2",
     colors: { i: "#f5adbd", p: "#f6a6b6", O: OUTLINE, W: "#ffffff" },
-    // long thin ears with pink down the middle, head and body one big egg, arched brows over small dot eyes
-    // with a white glint, blush on the outer cheeks and a little cat mouth
+    // long thin ears with pink down the middle; a big round head (about twice the body) with arched brows over
+    // small dot eyes with a white glint, blush on the outer cheeks and a little mouth; a small body with stubby arms
     head: [
       "................",
       ".....S....S.....",
@@ -182,26 +182,22 @@ const CARTOONS: Record<string, Cartoon> = {
       ".SppSSSSSSSSppS.",
       ".SSSSSOSSOSSSSS.",
       ".SSSSSSOOSSSSSS.",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
     ],
     sit: [
-      "..SSSSSSSSSSSS..",
-      ".SSSSSSSSSSSSSS.",
-      "..SSSSSSSSSSSS..",
-      "..sSSSSSSSSSSs..",
-      "...ssssssssss...",
-    ],
-    stand: [
-      "..SSSSSSSSSSSS..",
-      ".SSSSSSSSSSSSSS.",
-      ".SSSSSSSSSSSSSS.",
-      "..SSSSSSSSSSSS..",
+      "....OOOOOOOO....",
       "..SSSSSSSSSSSS..",
       "...SSSSSSSSSS...",
       "...sSSSSSSSSs...",
       "....ssssssss....",
-      "....SS....SS....",
-      "....SS....SS....",
-      "....SS....SS....",
+    ],
+    stand: [
+      "....OOOOOOOO....",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
+      "...SSSSSSSSSS...",
+      "....ssssssss....",
       "....SS....SS....",
       "....ss....ss....",
     ],
@@ -257,8 +253,13 @@ const CARTOONS: Record<string, Cartoon> = {
 /** the cartoon characters offered in the editor, in order */
 export const CHARACTERS = Object.entries(CARTOONS).map(([id, c]) => ({ id, name: c.name }));
 const cartoonOf = (look: AvatarLook): Cartoon | null => (look.char && Object.hasOwn(CARTOONS, look.char) ? CARTOONS[look.char] : null);
-/** rows a character's head sticks up above the built kid's; draw its grid this much higher */
-export const liftOf = (look: AvatarLook) => { const c = cartoonOf(look); return c ? c.head.length - HEAD.length : 0; };
+/** rows a character is taller than the built kid in this pose; draw its grid this much higher so it sits and
+ *  stands on the same spot (a big head, short legs) */
+export const liftOf = (look: AvatarLook, pose: "sit" | "stand" = "sit") => {
+  const c = cartoonOf(look);
+  if (!c) return 0;
+  return pose === "sit" ? c.head.length + c.sit.length - HEAD.length - TORSO_SIT.length : c.head.length + c.stand.length - HEAD.length - BODY_STAND.length;
+};
 /** the color of their hands and face (the built kid's skin, or the character's) */
 export const skinOf = (look: AvatarLook) => cartoonOf(look)?.skin ?? pick(SKINS, look.skin);
 /** what they wear on top: the chart color for the built kid, the character's own shirt (or body) otherwise */
@@ -562,7 +563,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   // standing character on a break, holding a mug
   if (o.state === "break") {
     const g = character({ look: o.look, shirt: o.shirt, pose: "stand", blink });
-    drawGrid(ctx, g, 2, 49 - liftOf(o.look) + (o.frame % 10 < 5 ? 0 : 1));
+    drawGrid(ctx, g, 2, 49 - liftOf(o.look, "stand") + (o.frame % 10 < 5 ? 0 : 1));
     rect(ctx, 14, 61, 3, 3, "#f2ece0"); rect(ctx, 14, 61, 3, 1, "#7a4523");
     if (o.frame % 6 < 3) rect(ctx, 15, 58, 1, 2, "rgba(255,255,255,.75)"); else rect(ctx, 16, 57, 1, 2, "rgba(255,255,255,.75)");
   }
