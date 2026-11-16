@@ -6,7 +6,7 @@
 import type { Session, Subject } from "./types";
 import { byDay, streaks, subjectTotals, touching, yearGrid } from "./stats";
 import { HOUR } from "./time";
-import { drawGrid, portrait, shade, type AvatarLook, type Grid } from "./pixel";
+import { drawGrid, portrait, portraitFit, shade, type AvatarLook, type Grid } from "./pixel";
 import { drawShareFooter, FOOTER_H, PAL, renderPixelPng, sky, text, textW, fit, rect, tile, woodFrame, type CardTheme, type Pal } from "./shareKit";
 export type { CardTheme } from "./shareKit";
 
@@ -134,7 +134,8 @@ export function drawCard(ctx: CanvasRenderingContext2D, d: ShareData, theme: Car
   rect(ctx, wx + 2, wy + 2, 50, 50, p.edge);
   sky(ctx, wx + 3, wy + 3, 48, 48, p);
   const g: Grid = portrait(d.look, d.shirt).slice(1);
-  ctx.save(); ctx.translate(wx + 3, wy + 3 + 48 - g.length * 3); ctx.scale(3, 3); drawGrid(ctx, g, 0, 0); ctx.restore();
+  const pf = portraitFit(g, 48);
+    ctx.save(); ctx.translate(wx + 3 + pf.dx, wy + 3 + pf.dy); ctx.scale(pf.scale, pf.scale); drawGrid(ctx, g, 0, 0); ctx.restore();
 
   const tx = 88;
   text(ctx, fit(titleOf(d), W - tx - 20, 2), tx, 36, p.ink, 2);

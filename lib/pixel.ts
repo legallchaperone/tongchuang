@@ -9,6 +9,8 @@ export interface AvatarLook {
   skin: number; // index into SKINS
   hair: number; // style index into HAIR_STYLES
   hairColor: number; // index into HAIR_COLORS
+  /** a ready-made cartoon character (key of CHARACTERS) instead of the kid built from the fields above; missing = built */
+  char?: string;
 }
 
 export const SKINS = ["#f7d7b5", "#ecbf94", "#cf9466", "#a26a45", "#6e4430"];
@@ -141,6 +143,130 @@ export const HAIR_STYLES: string[][] = [
   ],
 ];
 
+/* ─────────── ready-made cartoon characters ─────────── */
+// same letters as the built kid (S face/body, s shadow, E eye, p blush, B shirt, b shirt shadow, W white, P pants, F shoes, H hair)
+// plus each character's own: i inner ear, m mouth, Y shorts, O outline drawn inside the figure. The head map includes the hair; it may be taller than HEAD
+// (ears, a big head) and its body shorter; liftOf lines its feet / seat up with the built kid's.
+interface Cartoon {
+  name: string;
+  /** face / body color; also the hands at the desk */
+  skin: string;
+  /** fixed shirt color (the person's chart color still tints the rug and curtains); missing = the body has no shirt */
+  shirt?: string;
+  colors: Record<string, string>;
+  head: string[];
+  sit: string[];
+  stand: string[];
+}
+const CARTOONS: Record<string, Cartoon> = {
+  usagi: {
+    name: "乌萨奇",
+    skin: "#fcebd2",
+    colors: { i: "#f5adbd", p: "#f6a6b6", O: OUTLINE, W: "#ffffff" },
+    // long thin ears with pink down the middle; a big round head (about twice the body) with arched brows over
+    // small dot eyes with a white glint, blush on the outer cheeks and a little mouth; a small body with stubby arms
+    head: [
+      "................",
+      ".....S....S.....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SiS..SiS....",
+      "....SSS..SSS....",
+      "...SSSSSSSSSS...",
+      "..SSOOSSSSOOSS..",
+      ".SOSSSSSSSSSSOS.",
+      ".SSSSSSSSSSSSSS.",
+      ".SSSWOSSSSWOSSS.",
+      ".SSSOOSSSSOOSSS.",
+      ".SppSSSSSSSSppS.",
+      ".SSSSSOSSOSSSSS.",
+      ".SSSSSSOOSSSSSS.",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
+    ],
+    sit: [
+      "....OOOOOOOO....",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
+      "...sSSSSSSSSs...",
+      "....ssssssss....",
+    ],
+    stand: [
+      "....OOOOOOOO....",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
+      "...SSSSSSSSSS...",
+      "....ssssssss....",
+      "....SS....SS....",
+      "....ss....ss....",
+    ],
+  },
+  shinchan: {
+    name: "蜡笔小新",
+    skin: "#fcd5b5",
+    shirt: "#e8413a",
+    colors: { H: "#16131c", m: "#8a2a1e", Y: "#f5c518", y: "#d09a10", F: "#5e3218", W: "#ffffff", O: "#16131c" },
+    // three-quarter view facing right: the black hair caps the top and the back of the head (left), thick brows,
+    // big black eyes with a white glint, and the potato cheek bulging out low on the right past the hair
+    head: [
+      "................",
+      "................",
+      "....HHHHH.......",
+      "..HHHHHHHHH.....",
+      ".HHHHHHHHHHH....",
+      ".HHHHHHHHHHHH...",
+      ".HHSSSSSSSSSS...",
+      ".HSSHHHSSHHHS...",
+      ".HSSSHHSSSHHSS..",
+      ".SSSSSSSSSSSSS..",
+      ".SSSSWOSSSWOSSS.",
+      ".SSSSOOSSSOOSSS.",
+      "..SSSSSSSSSSSSS.",
+      "...SSSSSSSSmSSS.",
+      "....SSSSSSSSSSS.",
+      ".....sSSSSSSSs..",
+      ".......ssssss...",
+    ],
+    sit: [
+      "....BBBBBBBB....",
+      "...BBBBBBBBBB...",
+      "..BBBBBBBBBBBB..",
+      "..bBBBBBBBBBBb..",
+      "..bBBBBBBBBBBb..",
+    ],
+    stand: [
+      "....BBBBBBBB....",
+      "...BBBBBBBBBB...",
+      "..BBBBBBBBBBBB..",
+      "..BbBBBBBBBBbB..",
+      "..BbBBBBBBBBbB..",
+      "..SbBBBBBBBBbS..",
+      "...bbbbbbbbbb...",
+      "....YYYYYYYY....",
+      "....YYYYYYYY....",
+      "....yYY..YYy....",
+      "....SSS..SSS....",
+      "....WWW..WWW....",
+      "....FFF..FFF....",
+    ],
+  },
+};
+/** the cartoon characters offered in the editor, in order */
+export const CHARACTERS = Object.entries(CARTOONS).map(([id, c]) => ({ id, name: c.name }));
+const cartoonOf = (look: AvatarLook): Cartoon | null => (look.char && Object.hasOwn(CARTOONS, look.char) ? CARTOONS[look.char] : null);
+/** rows a character is taller than the built kid in this pose; draw its grid this much higher so it sits and
+ *  stands on the same spot (a big head, short legs) */
+export const liftOf = (look: AvatarLook, pose: "sit" | "stand" = "sit") => {
+  const c = cartoonOf(look);
+  if (!c) return 0;
+  return pose === "sit" ? c.head.length + c.sit.length - HEAD.length - TORSO_SIT.length : c.head.length + c.stand.length - HEAD.length - BODY_STAND.length;
+};
+/** the color of their hands and face (the built kid's skin, or the character's) */
+export const skinOf = (look: AvatarLook) => cartoonOf(look)?.skin ?? pick(SKINS, look.skin);
+/** what they wear on top: the chart color for the built kid, the character's own shirt (or body) otherwise */
+export const topOf = (look: AvatarLook, shirt: string) => { const c = cartoonOf(look); return c ? c.shirt ?? c.skin : shirt; };
+
 export type Grid = (string | null)[][];
 
 function blank(w: number, h: number): Grid {
@@ -172,17 +298,21 @@ export interface CharOpts { look: AvatarLook; shirt: string; pose: "sit" | "stan
 
 /** full character grid (16 x 16 seated, 16 x 26 standing), with a 1px outline margin */
 export function character({ look, shirt, pose, blink }: CharOpts): Grid {
-  const skin = pick(SKINS, look.skin);
+  const toon = cartoonOf(look);
+  const skin = skinOf(look);
+  const top = topOf(look, shirt);
   const hair = pick(HAIR_COLORS, look.hairColor);
   const colors: Record<string, string | null> = {
     S: skin, s: shade(skin, -0.18), E: blink ? shade(skin, -0.35) : "#2a1a14", p: mix(skin, "#f08a8a", 0.35),
-    B: shirt, b: shade(shirt, -0.22), W: "#fbf4e2", H: hair, h: shade(hair, -0.25), P: "#3d4a6b", F: "#2a1a14",
+    B: top, b: shade(top, -0.22), W: "#fbf4e2", H: hair, h: shade(hair, -0.25), P: "#3d4a6b", F: "#2a1a14",
+    ...toon?.colors,
   };
-  const body = pose === "sit" ? TORSO_SIT : BODY_STAND;
-  const g = blank(16, HEAD.length + body.length + 1);
-  stamp(g, HEAD, 0, 0, colors);
-  stamp(g, body, 0, HEAD.length, colors);
-  stamp(g, pick(HAIR_STYLES, look.hair), 0, 0, colors);
+  const head = toon ? toon.head : HEAD;
+  const body = toon ? (pose === "sit" ? toon.sit : toon.stand) : pose === "sit" ? TORSO_SIT : BODY_STAND;
+  const g = blank(16, head.length + body.length + 1);
+  stamp(g, head, 0, 0, colors);
+  stamp(g, body, 0, head.length, colors);
+  if (!toon) stamp(g, pick(HAIR_STYLES, look.hair), 0, 0, colors);
   return outline(g);
 }
 
@@ -379,12 +509,12 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   if (seated) {
     const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink });
     const bob = o.state === "focus" && o.frame % 8 < 4 ? 0 : 1;
-    drawGrid(ctx, g, 40, 32 + (o.state === "paused" ? 1 : bob));
+    drawGrid(ctx, g, 40, 32 - liftOf(o.look) + (o.state === "paused" ? 1 : bob));
   }
   if (slump) {
     // head sunk onto the desk, eyes shut, slow breathing
     const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink: true });
-    drawGrid(ctx, g, 40, 39 + (o.frame % 16 < 8 ? 0 : 1));
+    drawGrid(ctx, g, 40, 39 - liftOf(o.look) + (o.frame % 16 < 8 ? 0 : 1));
   }
 
   // desk
@@ -413,7 +543,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   }
   // hands writing
   if (seated) {
-    const skin = pick(SKINS, o.look.skin);
+    const skin = skinOf(o.look);
     const hx = o.state === "focus" ? 49 + (o.frame % 4 < 2 ? 0 : 2) : 49;
     rect(ctx, 42, 50, 3, 2, OUTLINE); rect(ctx, 43, 50, 2, 1, skin);
     rect(ctx, hx, 50, 3, 2, OUTLINE); rect(ctx, hx, 50, 2, 1, skin);
@@ -421,10 +551,10 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   }
   if (slump) {
     // folded arms on the desk, the face resting on them
-    const sh = o.shirt;
+    const sh = topOf(o.look, o.shirt);
     rect(ctx, 37, 47, 22, 5, OUTLINE);
     rect(ctx, 38, 48, 20, 3, sh); rect(ctx, 38, 50, 20, 1, shade(sh, -0.22));
-    rect(ctx, 38, 48, 3, 2, pick(SKINS, o.look.skin)); rect(ctx, 55, 48, 3, 2, pick(SKINS, o.look.skin));
+    rect(ctx, 38, 48, 3, 2, skinOf(o.look)); rect(ctx, 55, 48, 3, 2, skinOf(o.look));
   }
   // lamp
   const lx = 70;
@@ -435,7 +565,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   // standing character on a break, holding a mug
   if (o.state === "break") {
     const g = character({ look: o.look, shirt: o.shirt, pose: "stand", blink });
-    drawGrid(ctx, g, 2, 49 + (o.frame % 10 < 5 ? 0 : 1));
+    drawGrid(ctx, g, 2, 49 - liftOf(o.look, "stand") + (o.frame % 10 < 5 ? 0 : 1));
     rect(ctx, 14, 61, 3, 3, "#f2ece0"); rect(ctx, 14, 61, 3, 1, "#7a4523");
     if (o.frame % 6 < 3) rect(ctx, 15, 58, 1, 2, "rgba(255,255,255,.75)"); else rect(ctx, 16, 57, 1, 2, "rgba(255,255,255,.75)");
   }
@@ -502,5 +632,13 @@ function drawClosed(ctx: CanvasRenderingContext2D, o: SceneOpts) {
 /** a head-and-shoulders portrait grid for avatars */
 export function portrait(look: AvatarLook, shirt: string): Grid {
   const g = character({ look, shirt, pose: "sit" });
-  return g.slice(0, 15);
+  // a taller character keeps its whole head (ears included) and a little of the body; draw it with portraitFit
+  return g.slice(0, 15 + liftOf(look));
+}
+
+/** how to fit a portrait grid (after dropping its empty first row) into a square box of `box` pixels:
+ *  whole-number scale, centered across, standing on the bottom edge */
+export function portraitFit(g: Grid, box: number) {
+  const scale = Math.max(1, Math.floor(Math.min(box / 16, box / g.length)));
+  return { scale, dx: Math.floor((box - 16 * scale) / 2), dy: box - g.length * scale };
 }
