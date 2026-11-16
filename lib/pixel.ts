@@ -164,7 +164,7 @@ const CARTOONS: Record<string, Cartoon> = {
     skin: "#f7efa2",
     colors: { i: "#f4b4cc", p: "#f6b3cb", Y: "#f6d23c", O: OUTLINE, W: "#ffffff" },
     // thin ears side by side with pink inside, a yellow tuft where they meet the head, a big round face taking up
-    // most of the figure, half-shut eyes with white in them, blush at the outer cheeks, a small nose and mouth low in the middle
+    // most of the figure, black eyes with a white shine across the top, blush at the outer cheeks, a small nose and mouth low in the middle
     head: [
       "................",
       ".....iS..iS.....",
@@ -176,11 +176,11 @@ const CARTOONS: Record<string, Cartoon> = {
       "...SYYYYYYYYS...",
       "..SSSSSSSSSSSS..",
       ".SSSSSSSSSSSSSS.",
-      ".SSOOOSSSSOOOSS.",
+      ".SSOOSSSSSSOOSS.",
       ".SOWWOSSSSOWWOS.",
-      ".pSOOOSSSSOOOSp.",
-      ".ppSSSSOOSSSSpp.",
-      ".SSSSSSSSSSSSSS.",
+      ".SOOOOSSSSOOOOS.",
+      ".pSOOSSOOSSOOSp.",
+      ".ppSSSSSSSSSSpp.",
       "..SSSSSOOSSSSS..",
       "...SSSSSSSSSS...",
       "....ssssssss....",
