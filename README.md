@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
-![version](https://img.shields.io/badge/version-1.12.0-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.13.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -164,6 +164,6 @@ scripts/changelog.mjs 生成与校验 CHANGELOG.md
 ## 美术、字体与声音
 
 - 房间、图标和自己捏的小人都是为本项目原创绘制的像素画，没有使用任何游戏素材。
-- 可选的卡通角色（乌萨奇、蜡笔小新）是同人致敬的像素画，角色版权归原作者所有（乌萨奇 ©ナガノ；蜡笔小新 ©臼井仪人／双叶社）。
+- 可选的卡通角色（乌萨奇、蜡笔小新、Hello Kitty）是同人致敬的像素画，角色版权归原作者所有（乌萨奇 ©ナガノ；蜡笔小新 ©臼井仪人／双叶社；Hello Kitty ©Sanrio）。
 - 字体为 Fusion Pixel Font，遵循 SIL Open Font License 1.1，许可证见 `public/fonts/fusion12/OFL.txt`。
 - 环境声为公有领域、CC0 与 CC BY 4.0 的真实录音（经 Blanket 项目整理），作者署名见 [`public/sounds/CREDITS.md`](public/sounds/CREDITS.md)，专注页的“音源署名”里也能看到。

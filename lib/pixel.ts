@@ -157,6 +157,8 @@ interface Cartoon {
   head: string[];
   sit: string[];
   stand: string[];
+  /** drawn over the head after the outline, so thin lines (whiskers) stick out past it instead of getting outlined */
+  over?: string[];
 }
 const CARTOONS: Record<string, Cartoon> = {
   usagi: {
@@ -251,6 +253,58 @@ const CARTOONS: Record<string, Cartoon> = {
       "....FFF..FFF....",
     ],
   },
+  kitty: {
+    name: "Hello Kitty",
+    skin: "#ffffff",
+    shirt: "#e8364a",
+    colors: { R: "#e8364a", r: "#b8243a", N: "#f7c51e", Q: "#f6a8c3", W: "#ffffff", s: "#d9d4d0", K: OUTLINE },
+    // a wide white head, a pointed ear on the left and a big red bow over the right one, dot eyes set far apart,
+    // a yellow nose, whiskers and no mouth; a pink shirt under red overalls with two white buttons, white legs
+    head: [
+      "................",
+      "..S......RR.RR..",
+      "..SS....RRRrRRR.",
+      "..SSS...RRRrRRR.",
+      "..SSSSSSSRRSRR..",
+      "..SSSSSSSSSSSS..",
+      "..SSSSSSSSSSSS..",
+      "..SSSESSSSESSS..",
+      "..SSSESSSSESSS..",
+      "..SSSSSSNNSSSS..",
+      "..SSSSSSSSSSSS..",
+      "...SSSSSSSSSS...",
+      "....KKKKKKKK....",
+    ],
+    over: [
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................",
+      "KK............KK",
+      "................",
+      "KK............KK",
+      "................",
+    ],
+    sit: [
+      "....QQRRRRQQ....",
+      "...QQRWRRWRQQ...",
+      "....RRRRRRRR....",
+      "....RRRRRRRR....",
+      "....rrrrrrrr....",
+    ],
+    stand: [
+      "....QQRRRRQQ....",
+      "...SQRWRRWRQS...",
+      "....RRRRRRRR....",
+      "....RRRRRRRR....",
+      "....RRR..RRR....",
+      "....SSS..SSS....",
+      "....sss..sss....",
+    ],
+  },
 };
 /** the cartoon characters offered in the editor, in order */
 export const CHARACTERS = Object.entries(CARTOONS).map(([id, c]) => ({ id, name: c.name }));
@@ -313,7 +367,9 @@ export function character({ look, shirt, pose, blink }: CharOpts): Grid {
   stamp(g, head, 0, 0, colors);
   stamp(g, body, 0, head.length, colors);
   if (!toon) stamp(g, pick(HAIR_STYLES, look.hair), 0, 0, colors);
-  return outline(g);
+  const out = outline(g);
+  if (toon?.over) stamp(out, toon.over, 0, 0, colors);
+  return out;
 }
 
 function mix(a: string, b: string, t: number) {
