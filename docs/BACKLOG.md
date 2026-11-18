@@ -58,6 +58,7 @@
 
 ## 已完成（摘要，详见 CHANGELOG）
 
+- v1.14.0：R-031 新角色奶龙
 - v1.13.0：R-031 新角色 Hello Kitty（角色可以比 16 像素宽：`CARTOONS` 的 `width`；胡须这类细线画在描边外面：`over` 层）
 - v1.12.0：R-031 卡通角色（捏小人可以选乌萨奇、蜡笔小新；像素画在 `lib/pixel.ts` 的 `CARTOONS`，加新角色只需在那里加一项）
 - v1.11.0：R-030 同修（一起修一门课；第一门是 CS336，16 周；终端跑测试自动上报、过了的测试点亮星星；同修榜；“今天”页卡片；截止按地球上最晚的时区；缓交卡；开发者用 Claude 手动写反馈）。设计见 [research/study-together-courses.md](research/study-together-courses.md)
