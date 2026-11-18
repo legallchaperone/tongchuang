@@ -312,6 +312,46 @@ const CARTOONS: Record<string, Cartoon> = {
       ".....sss....sss.....",
     ],
   },
+  nailong: {
+    name: "奶龙",
+    skin: "#f6b52e",
+    colors: { C: "#fde4b8", c: "#efcd92", G: "#2f8f3a", E: "#121a14", W: "#ffffff", F: "#7a4a2a", L: "#fbc85a" },
+    // a big round orange-yellow head that runs straight into the body, big green eyes set far apart with a dark
+    // pupil and a glint, a soft muzzle bump, a cream belly, stubby arms and little brown claws
+    head: [
+      "................",
+      "................",
+      ".....SSSSSS.....",
+      "...SSSSSSSSSS...",
+      "..SSSSSSSSSSSS..",
+      ".SSGGWSSSSGGWSS.",
+      ".SSGEGSSSSGEGSS.",
+      ".SSGGGSSSSGGGSS.",
+      ".SSSSSLLLLSSSSS.",
+      ".SSSSSSssSSSSSS.",
+      "..SSSSSSSSSSSS..",
+    ],
+    sit: [
+      "..SSSSCCCCSSSS..",
+      ".SSSCCCCCCCCSSS.",
+      ".SSSCCCCCCCCSSS.",
+      ".FsSCCCCCCCCSsF.",
+      "..ssscccccccss..",
+    ],
+    stand: [
+      "..SSSSCCCCSSSS..",
+      ".SSSCCCCCCCCSSS.",
+      ".SSSCCCCCCCCSSS.",
+      ".SsSCCCCCCCCSsS.",
+      ".FsSCCCCCCCCSsF.",
+      "..SSSCCCCCCSSS..",
+      "..SSSSccccSSSS..",
+      "...SSSSSSSSSS...",
+      "...SSS....SSS...",
+      "...SSS....SSS...",
+      "...FSF....FSF...",
+    ],
+  },
 };
 /** the cartoon characters offered in the editor, in order */
 export const CHARACTERS = Object.entries(CARTOONS).map(([id, c]) => ({ id, name: c.name }));
