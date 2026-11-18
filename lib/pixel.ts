@@ -314,21 +314,23 @@ const CARTOONS: Record<string, Cartoon> = {
   },
   nailong: {
     name: "奶龙",
-    skin: "#f6b52e",
-    colors: { C: "#fde4b8", c: "#efcd92", G: "#2f8f3a", E: "#121a14", W: "#ffffff", F: "#7a4a2a", L: "#fbc85a" },
-    // a big round orange-yellow head that runs straight into the body, big green eyes set far apart with a dark
-    // pupil and a glint, a soft muzzle bump, a cream belly, stubby arms and little brown claws
+    skin: "#f9c93a",
+    colors: { C: "#fdeac2", c: "#f1d49c", G: "#3c9a3e", E: "#121a14", W: "#ffffff", F: "#7a4a2a", m: "#a0661e" },
+    // a tall round lemon-yellow head that runs straight into the body, big round eyes set far apart on its sides
+    // (white all round a green iris and dark pupil), a tiny pouty mouth, a cream belly, stubby arms, brown claws
     head: [
       "................",
       "................",
-      ".....SSSSSS.....",
+      "......SSSS......",
+      "....SSSSSSSS....",
       "...SSSSSSSSSS...",
       "..SSSSSSSSSSSS..",
-      ".SSGGWSSSSGGWSS.",
-      ".SSGEGSSSSGEGSS.",
-      ".SSGGGSSSSGGGSS.",
-      ".SSSSSLLLLSSSSS.",
-      ".SSSSSSssSSSSSS.",
+      ".SSWWSSSSSSWWSS.",
+      ".SWGEWSSSSWGEWS.",
+      ".SWEEWSSSSWEEWS.",
+      ".SSWWSSSSSSWWSS.",
+      ".SSSSSSmmSSSSSS.",
+      ".SSSSSSSSSSSSSS.",
       "..SSSSSSSSSSSS..",
     ],
     sit: [
