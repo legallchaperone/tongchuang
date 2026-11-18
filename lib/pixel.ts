@@ -157,6 +157,10 @@ interface Cartoon {
   head: string[];
   sit: string[];
   stand: string[];
+  /** drawn over the head after the outline, so thin lines (whiskers) stick out past it instead of getting outlined */
+  over?: string[];
+  /** grid width when wider than the built kid's 16 (even, so it stays centered on the same spot) */
+  width?: number;
 }
 const CARTOONS: Record<string, Cartoon> = {
   usagi: {
@@ -251,6 +255,63 @@ const CARTOONS: Record<string, Cartoon> = {
       "....FFF..FFF....",
     ],
   },
+  kitty: {
+    name: "Hello Kitty",
+    skin: "#ffffff",
+    shirt: "#ea5f8c",
+    width: 20,
+    colors: { P: "#ea5f8c", p: "#c4416d", B: "#ef6f98", b: "#b8335f", N: "#f2c230", W: "#ffffff", s: "#dcd6d2", K: OUTLINE },
+    // a head much wider than tall: a pointed ear on the left and a pink bow on the right one, small dot eyes set
+    // low and far apart, a yellow nose between them, whiskers sticking out past the face, no mouth;
+    // a small body: pink dress with a white collar and yellow buttons, white paws and legs
+    head: [
+      "....................",
+      "...S........BBB.BBB.",
+      "...SS.......BBBbBBB.",
+      "...SSS......BBBbBBB.",
+      "...SSSSSSSSSSBBSBB..",
+      "..SSSSSSSSSSSSSSSS..",
+      "..SSSSSSSSSSSSSSSS..",
+      "..SSSSSSSSSSSSSSSS..",
+      "..SSSSSSSSSSSSSSSS..",
+      "..SSSSESSSSSSESSSS..",
+      "..SSSSESSSSSSESSSS..",
+      "..SSSSSSSSNNSSSSSS..",
+      "...SSSSSSSSSSSSSS...",
+      "....SSSSSSSSSSSS....",
+      ".....KKKKKKKKKK.....",
+    ],
+    over: [
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "KKK..............KKK",
+      "....................",
+      "KKK..............KKK",
+    ],
+    sit: [
+      ".....WWWWWWWWWW.....",
+      "....PPPPPNNPPPPP....",
+      "....PPPPPPPPPPPP....",
+      "....pPPPPNNPPPPp....",
+      ".....pppppppppp.....",
+    ],
+    stand: [
+      ".....WWWWWWWWWW.....",
+      "...SPPPPPNNPPPPPS...",
+      "....PPPPPPPPPPPP....",
+      "....PPPPPNNPPPPP....",
+      "....WWWWWWWWWWWW....",
+      ".....SSS....SSS.....",
+      ".....sss....sss.....",
+    ],
+  },
 };
 /** the cartoon characters offered in the editor, in order */
 export const CHARACTERS = Object.entries(CARTOONS).map(([id, c]) => ({ id, name: c.name }));
@@ -262,6 +323,8 @@ export const liftOf = (look: AvatarLook, pose: "sit" | "stand" = "sit") => {
   if (!c) return 0;
   return pose === "sit" ? c.head.length + c.sit.length - HEAD.length - TORSO_SIT.length : c.head.length + c.stand.length - HEAD.length - BODY_STAND.length;
 };
+/** columns a wider character spills past the built kid's 16 on each side; draw it this much further left */
+export const spillOf = (look: AvatarLook) => ((cartoonOf(look)?.width ?? 16) - 16) / 2;
 /** the color of their hands and face (the built kid's skin, or the character's) */
 export const skinOf = (look: AvatarLook) => cartoonOf(look)?.skin ?? pick(SKINS, look.skin);
 /** what they wear on top: the chart color for the built kid, the character's own shirt (or body) otherwise */
@@ -309,11 +372,13 @@ export function character({ look, shirt, pose, blink }: CharOpts): Grid {
   };
   const head = toon ? toon.head : HEAD;
   const body = toon ? (pose === "sit" ? toon.sit : toon.stand) : pose === "sit" ? TORSO_SIT : BODY_STAND;
-  const g = blank(16, head.length + body.length + 1);
+  const g = blank(toon?.width ?? 16, head.length + body.length + 1);
   stamp(g, head, 0, 0, colors);
   stamp(g, body, 0, head.length, colors);
   if (!toon) stamp(g, pick(HAIR_STYLES, look.hair), 0, 0, colors);
-  return outline(g);
+  const out = outline(g);
+  if (toon?.over) stamp(out, toon.over, 0, 0, colors);
+  return out;
 }
 
 function mix(a: string, b: string, t: number) {
@@ -509,12 +574,12 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   if (seated) {
     const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink });
     const bob = o.state === "focus" && o.frame % 8 < 4 ? 0 : 1;
-    drawGrid(ctx, g, 40, 32 - liftOf(o.look) + (o.state === "paused" ? 1 : bob));
+    drawGrid(ctx, g, 40 - spillOf(o.look), 32 - liftOf(o.look) + (o.state === "paused" ? 1 : bob));
   }
   if (slump) {
     // head sunk onto the desk, eyes shut, slow breathing
     const g = character({ look: o.look, shirt: o.shirt, pose: "sit", blink: true });
-    drawGrid(ctx, g, 40, 39 - liftOf(o.look) + (o.frame % 16 < 8 ? 0 : 1));
+    drawGrid(ctx, g, 40 - spillOf(o.look), 39 - liftOf(o.look) + (o.frame % 16 < 8 ? 0 : 1));
   }
 
   // desk
@@ -565,7 +630,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, o: SceneOpts) {
   // standing character on a break, holding a mug
   if (o.state === "break") {
     const g = character({ look: o.look, shirt: o.shirt, pose: "stand", blink });
-    drawGrid(ctx, g, 2, 49 - liftOf(o.look, "stand") + (o.frame % 10 < 5 ? 0 : 1));
+    drawGrid(ctx, g, Math.max(0, 2 - spillOf(o.look)), 49 - liftOf(o.look, "stand") + (o.frame % 10 < 5 ? 0 : 1));
     rect(ctx, 14, 61, 3, 3, "#f2ece0"); rect(ctx, 14, 61, 3, 1, "#7a4523");
     if (o.frame % 6 < 3) rect(ctx, 15, 58, 1, 2, "rgba(255,255,255,.75)"); else rect(ctx, 16, 57, 1, 2, "rgba(255,255,255,.75)");
   }
@@ -637,8 +702,9 @@ export function portrait(look: AvatarLook, shirt: string): Grid {
 }
 
 /** how to fit a portrait grid (after dropping its empty first row) into a square box of `box` pixels:
- *  whole-number scale, centered across, standing on the bottom edge */
+ *  whole-number scale, centered across (wide characters too), standing on the bottom edge */
 export function portraitFit(g: Grid, box: number) {
-  const scale = Math.max(1, Math.floor(Math.min(box / 16, box / g.length)));
-  return { scale, dx: Math.floor((box - 16 * scale) / 2), dy: box - g.length * scale };
+  const w = g[0]?.length ?? 16;
+  const scale = Math.max(1, Math.floor(Math.min(box / w, box / g.length)));
+  return { scale, dx: Math.floor((box - w * scale) / 2), dy: box - g.length * scale };
 }
