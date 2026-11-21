@@ -152,8 +152,7 @@ export function setupCommands(origin: string, token: string, repoUrl: string | u
   return {
     install: "curl -LsSf https://astral.sh/uv/install.sh | sh",
     clone: repoUrl ? `git clone ${repoUrl}.git && cd ${repo}` : "",
-    // only inside an assignment (it has tests/); an old result file is never uploaded again; failing tests still get reported
-    report: `if [ -d tests ]; then rm -f /tmp/tongxiu.xml; uv run pytest --junitxml=/tmp/tongxiu.xml; [ -s /tmp/tongxiu.xml ] && curl -sS --data-binary @/tmp/tongxiu.xml "${origin}/api/tongxiu/report?t=${token}&repo=$(basename "$PWD")"; else echo "先进入作业目录再跑：cd ${repo || "作业目录"}"; fi`,
+    report: `uv run pytest --junitxml=/tmp/tongxiu.xml; curl -sS --data-binary @/tmp/tongxiu.xml "${origin}/api/tongxiu/report?t=${token}&repo=$(basename "$PWD")"`,
   };
 }
 
