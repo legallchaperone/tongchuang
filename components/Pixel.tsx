@@ -67,6 +67,14 @@ export function DeskScene({ p, live, present, rain = false, maxScale = 6, at, cl
   );
 }
 
+/** the built kid fills 16 x 15; a taller or wider cartoon character (R-031) is shown whole, smaller and centered */
+function portraitBox(rows: number, cols: number) {
+  if (rows <= 16 && cols <= 16) return "0 1 16 15";
+  // a square around the figure (row 0 is always empty), centered across and standing on the bottom
+  const side = Math.max(rows - 1, cols);
+  return `${(cols - side) / 2} ${rows - side} ${side} ${side}`;
+}
+
 /** head-and-shoulders pixel portrait on a little window of the person's local sky */
 export function PixelAvatar({ p, size = 36, live, showSky = true }: { p?: Profile | null; size?: number; live?: LiveStatus; showSky?: boolean }) {
   const g = useMemo(() => portrait(lookOf(p), shirtOf(p)), [p]);
@@ -76,7 +84,7 @@ export function PixelAvatar({ p, size = 36, live, showSky = true }: { p?: Profil
   g.forEach((row, y) => row.forEach((c, x) => { if (c) rects.push(<rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill={c} />); }));
   return (
     <span className={`pav ${st} ${showSky ? "sky-" + phase : "plain"}`} style={{ width: size, height: size }} title={p?.name}>
-      <svg viewBox="0 1 16 15" shapeRendering="crispEdges" aria-hidden="true">{rects}</svg>
+      <svg viewBox={portraitBox(g.length, g[0]?.length ?? 16)} shapeRendering="crispEdges" aria-hidden="true">{rects}</svg>
     </span>
   );
 }

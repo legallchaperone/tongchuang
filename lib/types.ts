@@ -13,7 +13,7 @@ export interface Profile {
   pomodoroMin: number;
   breakMin: number;
   /** pixel character look; null = derived from id */
-  look: { skin: number; hair: number; hairColor: number } | null;
+  look: { skin: number; hair: number; hairColor: number; /** R-031: a cartoon character instead (lib/pixel CHARACTERS) */ char?: string } | null;
   /** focus-mode preferences (R-001/R-002); missing = defaults */
   focusPrefs?: FocusPrefs | null;
   /** R-020 personal page (bio, widgets); null/missing = defaults. Read it through normalizePage() */
