@@ -324,7 +324,7 @@ function seedTongxiu(db: DB): NonNullable<DB["tx"]> {
   };
   hand("demo-lin", 1, -DAY / 2, { testsPassed: 3, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) }, { link: "https://github.com/example/assignment1-basics/commit/abc123", note: "BPE 训练一开始要 20 分钟，改成只更新受影响的 pair 之后 TinyStories 大概 90 秒。最长的 token 是 \" accomplishment\"。" });
   const fb = hand("demo-mia", 1, DAY, { testsPassed: 2, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) - DAY }, { note: "test_train_bpe_speed 还没过，pre-tokenization 用了多进程但合并那步还是慢。" });
-  feedback.push({ id: uid(), submissionId: fb.id, userId: "demo-mia", authorId: ME, createdAt: fb.firstSubmittedAt + 6 * HOUR,
+  feedback.push({ id: uid(), submissionId: fb.id, userId: "demo-mia", authorId: null, source: "ai", createdAt: fb.firstSubmittedAt + 6 * HOUR,
     text: "预分词用多进程是对的方向，做得好的是你已经把语料按特殊 token 切块了。\n\n还没过速度测试，最可能的原因是每次合并之后重新统计了所有 pair。建议：维护 pair → 计数 和 pair → 出现在哪些词里 两张表，合并时只更新受影响的词。" });
   return { cohorts: [cohort], members, subs, details, feedback, tests: seedTests(cohort) };
 }
@@ -835,13 +835,28 @@ export function createDemoBackend(): Backend {
       const out = { ...t, results: { ...t.results } };
       trSubs.forEach((x) => x.ids.has(cohortId) && x.cb(out));
     },
+    // demo: no API call, a canned reply after a short wait, so the flow can be seen
+    async requestAiFeedback(submissionId) {
+      const sub = db.tx!.subs.find((x) => x.id === submissionId);
+      if (!sub || sub.userId !== ME) return "error";
+      setTimeout(() => {
+        const d = db.tx!.details.find((x) => x.submissionId === submissionId);
+        const f: SubmissionFeedback = {
+          id: uid(), submissionId, userId: ME, authorId: null, source: "ai", createdAt: Date.now(),
+          text: `（演示模式：这是一段示例反馈，真实环境里由 Claude 读你的说明和报告后写。）\n\n做得好的地方：${d?.note ? "你把实验设置和结论写清楚了。" : "按时把这一步做完了。"}\n\n可以改进的地方：\n1. 每个结论后面补一句“为什么会这样”，比如 loss 曲线的拐点对应了学习率调度的哪一段。\n2. 报告里的数字最好附上运行环境（GPU 型号、batch size），方便同修对比。`,
+        };
+        db.tx!.feedback.push(f); save();
+        fbSubs.forEach((cb) => cb({ ...f }));
+      }, 2500);
+      return "started";
+    },
     isStaff: async () => delay(true),
     listFeedbackRequests: async () => delay(db.tx!.subs.filter((s) => s.feedbackRequestedAt != null).sort((a, b) => b.feedbackRequestedAt! - a.feedbackRequestedAt!).map((s) => ({ ...s }))),
     async addFeedback({ submissionId, userId, text: raw }) {
       const text = raw.trim();
       if (!text) throw new Error("反馈是空的");
       if (text.length > FEEDBACK_MAX) throw new Error(`反馈最多 ${FEEDBACK_MAX} 个字`);
-      const f: SubmissionFeedback = { id: uid(), submissionId, userId, authorId: ME, text, createdAt: Date.now() };
+      const f: SubmissionFeedback = { id: uid(), submissionId, userId, authorId: ME, source: "staff", text, createdAt: Date.now() };
       db.tx!.feedback.push(f); save();
       if (userId === ME) fbSubs.forEach((cb) => cb({ ...f }));
       return { ...f };

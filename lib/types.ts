@@ -252,7 +252,10 @@ export interface SubmissionFeedback {
   submissionId: string;
   /** the learner it is for */
   userId: UserId;
-  authorId: UserId;
+  /** the developer who wrote it; null when Claude wrote it */
+  authorId: UserId | null;
+  /** "ai": written by Claude automatically; "staff": a developer pasted it in */
+  source: "ai" | "staff";
   text: string;
   createdAt: number;
 }

@@ -41,6 +41,8 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
   /** on a step with stars, writing is optional: the form stays folded until asked for */
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** what happened to the last automatic-feedback request */
+  const [aiState, setAiState] = useState<"started" | "disabled" | "limit" | "error" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // the saved content arrives after the sheet opens (first load): fill the form once
   const [filled, setFilled] = useState(!!myDetail || !mySub);
@@ -77,6 +79,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
         dueAt: due, link, note, private: priv, requestFeedback: askFb,
       });
       onSaved(r.submission, r.detail);
+      if (askFb) setAiState(await app.backend.requestAiFeedback(r.submission.id));
       setAskFb(false);
       app.pushToast({ title: mySub ? "已更新" : isLate(r.submission) ? "交上去了（迟交）" : "交上去了", body: m.title, ttl: 3500 });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -137,7 +140,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
 
         {me && !me.leftAt && hasStars && !mySub && !writing ? (
           <section className="tx-form">
-            <p className="muted">星星全亮就算完成，不用交东西。想要开发者的反馈、或者想给同修看看你的实验和想法，可以写几句。</p>
+            <p className="muted">星星全亮就算完成，不用交东西。想要 Claude 看看你的报告、或者想给同修看看你的实验和想法，可以写几句或贴个链接。</p>
             <div className="tx-actions">
               <button className="btn" onClick={() => setWriting(true)}>写点什么（可选）</button>
               <button className="btn ghost" onClick={addTodo}>加到待办</button>
@@ -184,7 +187,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
               <textarea id="tx-note" className="textarea" rows={6} value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} disabled={busy} />
               <span className="muted" style={{ textAlign: "right" }}>{note.length}/{NOTE_MAX}</span>
             </div>
-            <label className="tx-check"><input type="checkbox" checked={askFb} onChange={(e) => setAskFb(e.target.checked)} disabled={busy} /> 请开发者帮我看看（用 Claude 写反馈，写好了会提醒你）</label>
+            <label className="tx-check"><input type="checkbox" checked={askFb} onChange={(e) => setAskFb(e.target.checked)} disabled={busy} /> 请 Claude 帮我看看（一两分钟内给反馈，写好了会提醒你）</label>
             <label className="tx-check"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} disabled={busy} /> 截止后也只给自己看（同修们只看得到交没交、测试数）</label>
             {err && <p className="td-err">{err}</p>}
             <div className="tx-actions">
@@ -200,9 +203,19 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
                 <button className="btn ghost" disabled={busy} onClick={() => onExtensions(me.extensions.filter((x) => x !== m.id)).catch((e) => setErr((e as Error).message))}>收回缓交卡</button>
               )}
             </div>
-            {waiting && <p className="muted">已经请开发者看了，等反馈中。</p>}
+            {waiting && (
+              <p className="muted">{
+                aiState === "disabled" ? "自动反馈还没开通，开发者会手动帮你看。"
+                : aiState === "limit" ? "自动反馈的次数用完了（每次提交 3 次，每天 10 次），开发者会手动帮你看。"
+                : aiState === "error" ? "自动反馈没能开始，开发者会手动帮你看。"
+                : "Claude 正在看，一般一两分钟，写好了会提醒你。"
+              }</p>
+            )}
+            {(link.trim() && !/\.pdf$|\.(md|markdown|txt|tex|py)$/i.test(link.trim())) && askFb && (
+              <p className="muted">Claude 只能直接读到 GitHub 上的 PDF 或文本文件（.md、.tex 等）；别的链接它只看到链接本身，可以把报告内容贴在说明里。</p>
+            )}
             {myFb.map((f) => (
-              <div key={f.id} className="tx-fb"><div className="muted">反馈 · {ago(f.createdAt, now)}</div><div className="tx-fb-text">{f.text}</div></div>
+              <div key={f.id} className="tx-fb"><div className="muted">{f.source === "ai" ? "Claude 的反馈" : "开发者的反馈"} · {ago(f.createdAt, now)}</div><div className="tx-fb-text">{f.text}</div></div>
             ))}
           </section>
         ) : (
@@ -236,7 +249,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
                   <div className="tx-peer-body">
                     {d.link && <a href={d.link} target="_blank" rel="noreferrer nofollow" className="tx-link">{d.link}</a>}
                     {d.note && <div className="tx-fb-text">{d.note}</div>}
-                    {fb.map((f) => <details key={f.id}><summary className="muted">开发者的反馈</summary><div className="tx-fb-text">{f.text}</div></details>)}
+                    {fb.map((f) => <details key={f.id}><summary className="muted">{f.source === "ai" ? "Claude 的反馈" : "开发者的反馈"}</summary><div className="tx-fb-text">{f.text}</div></details>)}
                   </div>
                 )}
                 {s && !d && <p className="muted tx-peer-body">截止之后、或者你也交了之后能看到内容（除非 TA 选了只给自己看）。</p>}

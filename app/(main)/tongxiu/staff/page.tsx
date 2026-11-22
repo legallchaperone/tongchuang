@@ -51,7 +51,7 @@ export default function StaffPage() {
         <div>
           <Link href="/tongxiu" className="muted" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 4 }}><IBack />同修</Link>
           <h1>写反馈</h1>
-          <p className="sub">同修们请求的反馈。复制提示词交给 Claude，把写好的反馈贴回来，对方会收到提醒。</p>
+          <p className="sub">同修们请求的反馈。配了 ANTHROPIC_API_KEY 时 Claude 会自动回复，这里只剩没自动回复成的；也可以复制提示词手动交给 Claude，把反馈贴回来。</p>
         </div>
         {staff && <label className="tx-check"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> 也显示已回复的</label>}
       </div>
@@ -115,7 +115,7 @@ function Request({ s, cohort, detail, person, feedback, done, onAdded }: {
         </div>
         {detail?.link && <a className="tx-link" href={detail.link} target="_blank" rel="noreferrer nofollow">{detail.link}</a>}
         {detail?.note ? <div className="tx-fb-text">{detail.note}</div> : <p className="muted">没有写说明。</p>}
-        {feedback.map((f) => <details key={f.id}><summary className="muted">之前的反馈 · {ago(f.createdAt, app.now)}</summary><div className="tx-fb-text">{f.text}</div></details>)}
+        {feedback.map((f) => <details key={f.id}><summary className="muted">{f.source === "ai" ? "Claude 自动写的反馈" : "之前的反馈"} · {ago(f.createdAt, app.now)}</summary><div className="tx-fb-text">{f.text}</div></details>)}
         <div className="tx-actions"><button className="btn" onClick={copy} disabled={!m}><ICopy />{copied ? "已复制" : "复制给 Claude 的提示词"}</button></div>
         <textarea className="textarea" rows={6} value={text} placeholder="把 Claude 写的反馈贴在这里（可以先改一改）" onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="反馈" />
         <div className="tx-actions"><button className="btn primary" onClick={send} disabled={busy || !text.trim()}>{busy ? "正在发…" : "发给 TA"}</button></div>

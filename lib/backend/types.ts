@@ -134,6 +134,12 @@ export interface Backend {
   subscribeFeedback(me: UserId, cb: (f: SubmissionFeedback) => void): Unsub;
   /** am I one of the developers who write feedback */
   isStaff(): Promise<boolean>;
+  /**
+   * ask Claude to write feedback on my submission now (it must already have requested feedback).
+   * "started": it arrives through subscribeFeedback in a minute or two; "disabled": not set up on this server
+   * (the request waits for a developer); "limit": too many automatic rounds; "error": something else failed
+   */
+  requestAiFeedback(submissionId: string): Promise<"started" | "disabled" | "limit" | "error">;
   /** staff only: every submission that asked for feedback, newest first */
   listFeedbackRequests(): Promise<Submission[]>;
   /** my personal report code for this cohort (made on first use); it goes into the test-report command */

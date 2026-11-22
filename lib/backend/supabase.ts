@@ -614,6 +614,18 @@ export function createSupabaseBackend(url: string, key: string): Backend {
         .subscribe();
       return () => { sb.removeChannel(ch); };
     },
+    async requestAiFeedback(submissionId) {
+      const { data } = await sb.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return "error";
+      try {
+        const res = await fetch("/api/tongxiu/feedback", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ submissionId }),
+        });
+        const body = await res.json().catch(() => ({}));
+        return body.status === "started" || body.status === "disabled" || body.status === "limit" ? body.status : "error";
+      } catch { return "error"; }
+    },
     async isStaff() {
       const { data, error } = await sb.rpc("is_staff");
       if (error) return false;
@@ -733,7 +745,8 @@ const toSubmission = (r: any): Submission => ({
 });
 const toDetail = (r: any): SubmissionDetail => ({ submissionId: r.submission_id, userId: r.user_id, link: r.link || "", note: r.note || "", private: !!r.private });
 const toFeedback = (r: any): SubmissionFeedback => ({
-  id: r.id, submissionId: r.submission_id, userId: r.user_id, authorId: r.author_id, text: r.text || "", createdAt: ts(r.created_at) || 0,
+  id: r.id, submissionId: r.submission_id, userId: r.user_id, authorId: r.author_id || null, source: r.source === "ai" ? "ai" : "staff",
+  text: r.text || "", createdAt: ts(r.created_at) || 0,
 });
 /** R-030: the usual failures in plain Chinese */
 function txError(e: { message: string; code?: string }): Error {

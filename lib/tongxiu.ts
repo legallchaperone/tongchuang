@@ -10,7 +10,7 @@ import { addDaysKey, dayKey, DAY, partsIn, weekdayCn } from "./time";
 
 export const MAX_EXTENSIONS = 3;
 export const EXTENSION_DAYS = 3;
-export const NOTE_MAX = 4000;
+export const NOTE_MAX = 20000;
 export const LINK_MAX = 500;
 export const FEEDBACK_MAX = 20000;
 export const COHORT_NAME_MAX = 40;
@@ -176,6 +176,8 @@ export function parsePytest(text: string): { passed: number; total: number } | n
 /** what the developers paste into Claude to write feedback for one submission */
 export function feedbackPrompt(o: {
   course: Course; m: Milestone; learner: string; tests: string; metric: string; link: string; note: string; late: boolean;
+  /** anything else worth knowing: star progress, the report attached below, ... */
+  extra?: string[];
 }) {
   const { course, m } = o;
   return [
@@ -199,8 +201,10 @@ export function feedbackPrompt(o: {
     "说明 / 报告：",
     o.note || "（没有写）",
     "",
+    ...(o.extra?.length ? ["", ...o.extra] : []),
+    "",
     "## 反馈要求",
-    "- 用中文，直接对这位同学说话，300–600 字。",
+    "- 用中文，直接对这位同学说话，400–900 字；内容少就写短一点。",
     "- 先说做得好的一两点，再按重要程度列出要改的地方，每条说清楚为什么、怎么改。",
     "- 链接里的代码或报告如果打不开，就只根据上面的文字给反馈，并说明这一点。",
     "- 不要打分，不要直接给出作业的完整答案代码。",

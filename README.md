@@ -8,7 +8,7 @@
 
 [立即使用](https://study.cwx.world) · [产品介绍](https://study.cwx.world/release) · [更新日志](CHANGELOG.md) · [需求池](docs/BACKLOG.md)
 
-![version](https://img.shields.io/badge/version-1.11.0-f5b83d?style=flat-square)
+![version](https://img.shields.io/badge/version-1.12.0-f5b83d?style=flat-square)
 ![Next.js](https://img.shields.io/badge/Next.js-15-3a2016?style=flat-square)
 ![Supabase](https://img.shields.io/badge/Supabase-Realtime-4f9a4a?style=flat-square)
 ![PWA](https://img.shields.io/badge/PWA-可添加到主屏幕-a8683a?style=flat-square)
@@ -53,7 +53,7 @@
 
 ### 同修：和同窗一起修一门课
 
-选一门课（第一门是 Stanford CS336），在自习室里开一期，同窗点一下就加入。每周一步：把页面上的命令粘到终端，作业会自动下载、官方测试会自动跑，结果传回同窗——哪个测试过了，对应的星星就自己亮，同修们实时看得到。“今天”页有这周要做的那一步，一键开始这门课的专注。想要反馈就请开发者看看：开发者用 Claude 写好反馈后会提醒你。
+选一门课（第一门是 Stanford CS336），在自习室里开一期，同窗点一下就加入。每周一步：把页面上的命令粘到终端，作业会自动下载、官方测试会自动跑，结果传回同窗——哪个测试过了，对应的星星就自己亮，同修们实时看得到。“今天”页有这周要做的那一步，一键开始这门课的专注。交报告时勾“请 Claude 帮我看看”，一两分钟后就有反馈：Claude 会读你的说明，以及 GitHub 上的 PDF 或 Markdown 报告。
 
 ### 数据：越记越想记
 
@@ -94,6 +94,7 @@ npm run dev
 2. 在 [Vercel](https://vercel.com) 导入本仓库，添加环境变量（项目首页的 Connect 按钮里能找到）：
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`（或 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`）
+   - 可选，同修的 Claude 自动反馈：`ANTHROPIC_API_KEY`（[Claude Console](https://platform.claude.com) 里建）和 `SUPABASE_SERVICE_ROLE_KEY`（Supabase → Project Settings → API Keys 里的 service_role key）。这两个只在服务器上用，不要加 `NEXT_PUBLIC_` 前缀；不填的话，反馈请求会留给开发者在 `/tongxiu/staff` 手动写
 3. 绑定域名：Vercel → Settings → Domains 添加域名，在 DNS 加 CNAME 指向 `cname.vercel-dns.com`。如果域名在 Cloudflare，这条记录要设为 **DNS only**（灰色云朵）。
 4. Supabase → Authentication → URL Configuration：Site URL 设为你的域名，并加入 Redirect URLs。
 5. 有中国大陆的用户？按 [docs/china-access.md](docs/china-access.md) 把注册邮件改成验证码，并用 Cloudflare Worker 把数据请求转到自己的域名（`cloudflare/supabase-proxy.js`）。
@@ -151,7 +152,8 @@ lib/stats.ts         统计（按各自时区分日）
 lib/courses/         同修的课表（每门课一个文件，开发者整理）
 lib/tongxiu.ts       同修：截止时间（UTC-12）、星星与进度、上报命令、给 Claude 的提示词
 lib/junit.ts         把 pytest 的 JUnit XML 读成“测试 → 过没过”
-app/api/tongxiu/     终端上报测试结果的接口（凭上报码写入，打印点亮了哪些星星）
+app/api/tongxiu/     report/：终端上报测试结果（凭上报码写入，打印点亮了哪些星星）；feedback/：调用 Claude 写作业反馈
+lib/aiFeedback.ts    给 Claude 看的报告：GitHub 上的 PDF 按链接附上，文本文件取回来放进提示词
 lib/changelog.json   版本与更新日志（唯一来源）
 supabase/schema.sql  表结构、行级权限、实时订阅、记录只能改短的数据库约束
 scripts/changelog.mjs 生成与校验 CHANGELOG.md

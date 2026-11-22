@@ -15,8 +15,8 @@ export function TongxiuWatcher() {
     let alive = true;
     let offSubs = () => {};
     let offTests = () => {};
-    const offFb = app.backend.subscribeFeedback(me, () => {
-      app.pushToast({ title: "开发者给你的作业写了反馈", ttl: 12000, action: location.pathname.startsWith("/tongxiu/") ? undefined : { label: "去看看", href: "/tongxiu" } });
+    const offFb = app.backend.subscribeFeedback(me, (f) => {
+      app.pushToast({ title: f.source === "ai" ? "Claude 给你的作业写了反馈" : "开发者给你的作业写了反馈", ttl: 12000, action: location.pathname.startsWith("/tongxiu/") ? undefined : { label: "去看看", href: "/tongxiu" } });
     });
     app.backend.listCohorts().then(({ cohorts }) => {
       if (!alive) return;

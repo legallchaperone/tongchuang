@@ -674,6 +674,15 @@ do $$ begin
   begin alter publication supabase_realtime add table public.test_results; exception when others then null; end;
 end $$;
 
+-- v1.12：Claude 自动写反馈。服务器用 service role 写入（绕过行级权限），author_id 为空、source = 'ai'；说明放宽到 2 万字，放得下整份报告
+alter table public.submission_feedback alter column author_id drop not null;
+alter table public.submission_feedback add column if not exists source text not null default 'staff';
+alter table public.submission_feedback drop constraint if exists submission_feedback_source_check;
+alter table public.submission_feedback add constraint submission_feedback_source_check check (source in ('staff', 'ai'));
+alter table public.submission_feedback add column if not exists model text;
+alter table public.submission_details drop constraint if exists submission_details_note_check;
+alter table public.submission_details add constraint submission_details_note_check check (char_length(note) <= 20000);
+
 -- 开发者要看到提交人的名字（可能不和他们在同一个自习室）
 drop policy if exists "profiles staff read" on public.profiles;
 create policy "profiles staff read" on public.profiles for select using (public.is_staff());
