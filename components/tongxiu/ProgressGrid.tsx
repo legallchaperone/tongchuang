@@ -37,16 +37,14 @@ export function ProgressGrid({ course, cohort, rows, subs, tests, now, meId, onO
               </th>
               <td className="stars num"><b>{r.stars}</b></td>
               {course.milestones.map((m) => {
-                const st = stepStatus(cohort, m, r.member, subs.find((s) => s.userId === r.member.userId && s.milestoneId === m.id), tests[r.member.userId], now);
-                const ext = r.member.extensions.includes(m.id);
+                const st = stepStatus(cohort, m, subs.find((s) => s.userId === r.member.userId && s.milestoneId === m.id), tests[r.member.userId], now);
                 return (
                   <td key={m.id}>
                     <button type="button" className={`tx-cell c-${st.state}`} onClick={() => onOpen(m)}
                       style={st.frac > 0 && st.frac < 1 ? { ["--fill" as string]: `${Math.round(st.frac * 100)}%` } : undefined}
-                      title={`${r.profile?.name || "同窗"} · ${m.title}：${CELL_LABEL[st.state]}${st.total ? ` · ★ ${st.lit}/${st.total}` : ""}${ext ? " · 用了缓交卡" : ""}`}
+                      title={`${r.profile?.name || "同窗"} · ${m.title}：${CELL_LABEL[st.state]}${st.total ? ` · ★ ${st.lit}/${st.total}` : ""}`}
                       aria-label={`${r.profile?.name || "同窗"} ${m.title} ${CELL_LABEL[st.state]}${st.total ? ` 星星 ${st.lit}/${st.total}` : ""}`}>
                       {st.frac > 0 && st.frac < 1 ? <span className="fill" /> : null}
-                      {ext ? <i /> : null}
                     </button>
                   </td>
                 );
@@ -59,9 +57,7 @@ export function ProgressGrid({ course, cohort, rows, subs, tests, now, meId, onO
       <div className="tx-legend muted">
         <span><span className="tx-cell c-done" />完成了</span>
         <span><span className="tx-cell c-open" style={{ ["--fill" as string]: "50%" }}><span className="fill" /></span>星星亮了一部分</span>
-        <span><span className="tx-cell c-late" />晚了完成</span>
-        <span><span className="tx-cell c-overdue" />过了截止还没完成</span>
-        <span><span className="tx-cell c-later"><i /></span>用了缓交卡</span>
+        <span><span className="tx-cell c-later" />还没到那一周</span>
       </div>
     </div>
   );

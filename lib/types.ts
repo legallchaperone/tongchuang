@@ -214,8 +214,6 @@ export interface CohortMember {
   userId: UserId;
   /** the subject made for this course when joining; focus time on it counts as course time */
   subjectId: string | null;
-  /** milestone ids a 缓交卡 was used on (at most MAX_EXTENSIONS) */
-  extensions: string[];
   joinedAt: number;
   leftAt: number | null;
 }
@@ -229,7 +227,7 @@ export interface Submission {
   testsPassed: number | null;
   testsTotal: number | null;
   metric: number | null;
-  /** the deadline this submission is measured against (extensions included) */
+  /** when the step's week in the plan is over (not a deadline): from then on classmates can read the content */
   dueAt: number;
   firstSubmittedAt: number;
   updatedAt: number;
@@ -237,13 +235,13 @@ export interface Submission {
   feedbackRequestedAt: number | null;
 }
 
-/** the content: only the owner until the deadline passes or the reader has handed in the same milestone */
+/** the content: only the owner until the step's week in the plan is over or the reader has handed in the same milestone */
 export interface SubmissionDetail {
   submissionId: string;
   userId: UserId;
   link: string;
   note: string;
-  /** keep it to myself even after the deadline */
+  /** keep it to myself only (classmates still see whether I handed in, and the test count) */
   private: boolean;
 }
 

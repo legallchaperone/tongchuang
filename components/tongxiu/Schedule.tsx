@@ -1,10 +1,10 @@
 "use client";
-// R-030 同修: the course week by week. With a cohort, weeks get dates and steps get deadlines, stars and my status.
+// R-030 同修: the course week by week. With a cohort, weeks get dates and steps get stars and my status.
 import type { Course, Milestone } from "@/lib/courses";
 import { KIND_LABEL } from "@/lib/courses";
 import type { Cohort, CohortMember, Submission, TestResults } from "@/lib/types";
 import { addDaysKey } from "@/lib/time";
-import { CELL_LABEL, keyLabel, leftLabel, stepStatus } from "@/lib/tongxiu";
+import { CELL_LABEL, keyLabel, stepStatus } from "@/lib/tongxiu";
 
 export function Stars({ lit, total }: { lit: number; total: number }) {
   if (!total) return null;
@@ -31,7 +31,7 @@ export function Schedule({ course, cohort, member, mine, tests, now, currentWeek
               <p className="muted tx-lect">{w.lectures.join(" · ")}{w.note ? (w.lectures.length ? " · " : "") + w.note : ""}</p>
             )}
             {ms.map((m) => {
-              const st = cohort ? stepStatus(cohort, m, member, mine?.find((s) => s.milestoneId === m.id), tests, now) : null;
+              const st = cohort ? stepStatus(cohort, m, mine?.find((s) => s.milestoneId === m.id), tests, now) : null;
               const mineToo = !!member && !!st;
               const Row = onOpen ? "button" : "div";
               return (
@@ -41,11 +41,7 @@ export function Schedule({ course, cohort, member, mine, tests, now, currentWeek
                     {m.title}{m.gpu === "required" ? <span className="tx-gpu" title="需要 NVIDIA GPU">GPU</span> : null}
                     {m.stars?.length ? <> <Stars lit={mineToo ? st!.lit : 0} total={m.stars.length} /></> : null}
                   </span>
-                  {st && (
-                    <span className="tx-ms-due muted">
-                      {member?.extensions.includes(m.id) ? "缓交 · " : ""}{mineToo && st.doneAt != null ? CELL_LABEL[st.state] : leftLabel(st.due, now)}
-                    </span>
-                  )}
+                  {mineToo && <span className="tx-ms-due muted">{CELL_LABEL[st!.state]}</span>}
                   {mineToo && <span className={`tx-cell c-${st!.state}`} aria-label={CELL_LABEL[st!.state]} />}
                 </Row>
               );

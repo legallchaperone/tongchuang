@@ -117,10 +117,8 @@ export interface Backend {
   /** join (or come back to) a cohort; subjectId is my subject for the course */
   joinCohort(cohortId: string, subjectId: string | null): Promise<CohortMember>;
   leaveCohort(cohortId: string): Promise<void>;
-  /** replace the milestones I used a 缓交卡 on (at most MAX_EXTENSIONS) */
-  setExtensions(cohortId: string, milestoneIds: string[]): Promise<void>;
   listSubmissions(cohortIds: string[]): Promise<Submission[]>;
-  /** RLS returns mine, and others' once their deadline has passed or I have handed in the same milestone */
+  /** RLS returns mine, and others' once the step's week in the plan is over or I have handed in the same milestone */
   listSubmissionDetails(submissionIds: string[]): Promise<SubmissionDetail[]>;
   listFeedback(submissionIds: string[]): Promise<SubmissionFeedback[]>;
   /** hand in or update my submission for one milestone */

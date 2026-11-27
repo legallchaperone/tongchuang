@@ -5,7 +5,7 @@ import { checkGuestbook } from "../guestbook";
 import { checkComment } from "../comments";
 import { checkTodo } from "../todos";
 import { CS336 } from "../courses/cs336";
-import { dueAt as milestoneDue, fakeResults, FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX } from "../tongxiu";
+import { dueAt as milestoneDue, fakeResults, FEEDBACK_MAX, LINK_MAX, NOTE_MAX } from "../tongxiu";
 import type { ProfilePage } from "../profilePage";
 import { msOnDay } from "../stats";
 import { workDay } from "../review";
@@ -310,20 +310,20 @@ function seedTongxiu(db: DB): NonNullable<DB["tx"]> {
     const old = db.subjects.find((x) => x.userId === fid && x.name === retag[fid]);
     let flip = false;
     db.sessions.forEach((x) => { if (old && x.userId === fid && x.subjectId === old.id && x.startedAt > Date.now() - 20 * DAY) { flip = !flip; if (flip) x.subjectId = sub.id; } });
-    members.push({ cohortId: cohort.id, userId: fid, subjectId: sub.id, extensions: [], joinedAt: Date.now() - 19 * DAY, leftAt: null });
+    members.push({ cohortId: cohort.id, userId: fid, subjectId: sub.id, joinedAt: Date.now() - 19 * DAY, leftAt: null });
   }
   const ms = CS336.milestones;
   const subs: Submission[] = [], details: SubmissionDetail[] = [], feedback: SubmissionFeedback[] = [];
   const hand = (userId: UserId, mi: number, early: number, o: Partial<Submission>, d: Partial<SubmissionDetail>) => {
-    const due = milestoneDue(cohort, ms[mi], null);
+    const due = milestoneDue(cohort, ms[mi]);
     const at = due - early;
     const s: Submission = { id: uid(), cohortId: cohort.id, userId, milestoneId: ms[mi].id, testsPassed: null, testsTotal: null, metric: null, dueAt: due, firstSubmittedAt: at, updatedAt: at, feedbackRequestedAt: null, ...o };
     subs.push(s);
     details.push({ submissionId: s.id, userId, link: "", note: "", private: false, ...d });
     return s;
   };
-  hand("demo-lin", 1, -DAY / 2, { testsPassed: 3, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) }, { link: "https://github.com/example/assignment1-basics/commit/abc123", note: "BPE 训练一开始要 20 分钟，改成只更新受影响的 pair 之后 TinyStories 大概 90 秒。最长的 token 是 \" accomplishment\"。" });
-  const fb = hand("demo-mia", 1, DAY, { testsPassed: 2, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1], null) - DAY }, { note: "test_train_bpe_speed 还没过，pre-tokenization 用了多进程但合并那步还是慢。" });
+  hand("demo-lin", 1, -DAY / 2, { testsPassed: 3, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1]) }, { link: "https://github.com/example/assignment1-basics/commit/abc123", note: "BPE 训练一开始要 20 分钟，改成只更新受影响的 pair 之后 TinyStories 大概 90 秒。最长的 token 是 \" accomplishment\"。" });
+  const fb = hand("demo-mia", 1, DAY, { testsPassed: 2, testsTotal: 3, feedbackRequestedAt: milestoneDue(cohort, ms[1]) - DAY }, { note: "test_train_bpe_speed 还没过，pre-tokenization 用了多进程但合并那步还是慢。" });
   feedback.push({ id: uid(), submissionId: fb.id, userId: "demo-mia", authorId: null, source: "ai", createdAt: fb.firstSubmittedAt + 6 * HOUR,
     text: "预分词用多进程是对的方向，做得好的是你已经把语料按特殊 token 切块了。\n\n还没过速度测试，最可能的原因是每次合并之后重新统计了所有 pair。建议：维护 pair → 计数 和 pair → 出现在哪些词里 两张表，合并时只更新受影响的词。" });
   return { cohorts: [cohort], members, subs, details, feedback, tests: seedTests(cohort) };
@@ -332,7 +332,7 @@ function seedTongxiu(db: DB): NonNullable<DB["tx"]> {
 /** the classmates' test runs so far: Lin is into the Transformer, Mia still fights BPE speed */
 function seedTests(cohort: Cohort): TestResults[] {
   const repo = CS336.milestones[1].repo;
-  const at = (mi: number, d: number) => milestoneDue(cohort, CS336.milestones[mi], null) + d;
+  const at = (mi: number, d: number) => milestoneDue(cohort, CS336.milestones[mi]) + d;
   const run = (userId: UserId, first: number, lit: [string, number][]): TestResults => {
     // every A1 test reported, failing, except the ones behind the stars already lit
     const results: Record<string, number | false> = {};
@@ -765,7 +765,7 @@ export function createDemoBackend(): Backend {
       const mine = new Set(db.rooms.filter((r) => r.memberIds.includes(ME)).map((r) => r.id));
       const cohorts = db.tx!.cohorts.filter((c) => mine.has(c.roomId));
       const ids = new Set(cohorts.map((c) => c.id));
-      return delay({ cohorts: cohorts.map((c) => ({ ...c })), members: db.tx!.members.filter((m) => ids.has(m.cohortId)).map((m) => ({ ...m, extensions: [...m.extensions] })) });
+      return delay({ cohorts: cohorts.map((c) => ({ ...c })), members: db.tx!.members.filter((m) => ids.has(m.cohortId)).map((m) => ({ ...m })) });
     },
     async createCohort({ courseId, name, roomId, startsOn }) {
       if (!name.trim()) throw new Error("给这一期起个名字");
@@ -776,17 +776,12 @@ export function createDemoBackend(): Backend {
     async joinCohort(cohortId, subjectId) {
       const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
       if (hit) { hit.leftAt = null; hit.subjectId = subjectId; save(); return { ...hit }; }
-      const m: CohortMember = { cohortId, userId: ME, subjectId, extensions: [], joinedAt: Date.now(), leftAt: null };
+      const m: CohortMember = { cohortId, userId: ME, subjectId, joinedAt: Date.now(), leftAt: null };
       db.tx!.members.push(m); save(); return { ...m };
     },
     async leaveCohort(cohortId) {
       const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
       if (hit) { hit.leftAt = Date.now(); save(); }
-    },
-    async setExtensions(cohortId, ids) {
-      if (ids.length > MAX_EXTENSIONS) throw new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
-      const hit = db.tx!.members.find((m) => m.cohortId === cohortId && m.userId === ME);
-      if (hit) { hit.extensions = [...ids]; save(); }
     },
     listSubmissions: async (cohortIds) => delay(db.tx!.subs.filter((s) => cohortIds.includes(s.cohortId)).map((s) => ({ ...s }))),
     async listSubmissionDetails(ids) {

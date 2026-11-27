@@ -1247,7 +1247,6 @@ a.plink:hover > .pav, a.plink:hover > .pav-st .pav { box-shadow: 0 0 0 2px var(-
 .tx-list { display: flex; flex-direction: column; gap: 6px; }
 .tx-li { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; background: var(--panel-2); box-shadow: inset 0 -3px 0 var(--slot); text-align: left; border: 0; width: 100%; }
 .tx-li:hover { filter: brightness(1.04); }
-.tx-li.over { box-shadow: inset 4px 0 0 var(--bad), inset 0 -3px 0 var(--slot); }
 .tx-join { display: flex; flex-direction: column; gap: 10px; }
 .tx-form { display: flex; flex-direction: column; gap: 10px; }
 .tx-form-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
@@ -1290,11 +1289,8 @@ button.tx-ms:hover { filter: brightness(1.05); }
 .tx-grid .hrs { padding-left: 8px; text-align: right; }
 .tx-cell { display: inline-block; width: 18px; height: 18px; padding: 0; border: 0; box-shadow: 0 0 0 2px var(--edge); background: var(--slot); position: relative; vertical-align: middle; cursor: pointer; }
 .tx-cell.c-done { background: var(--good); }
-.tx-cell.c-late { background: var(--lamp); }
 .tx-cell.c-open { background: var(--panel); box-shadow: 0 0 0 2px var(--edge), inset 0 0 0 2px var(--lamp); }
-.tx-cell.c-overdue { background: var(--panel); box-shadow: 0 0 0 2px var(--bad); }
 .tx-cell.c-later { background: var(--slot); opacity: .7; }
-.tx-cell i { position: absolute; right: 1px; top: 1px; width: 5px; height: 5px; background: var(--s6); }
 .tx-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
 .tx-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .tx-legend .tx-cell { width: 12px; height: 12px; cursor: default; }
@@ -1303,7 +1299,6 @@ button.tx-ms:hover { filter: brightness(1.05); }
 .tx-sheet { width: min(680px, 100%); }
 .tx-sheet h1 { font-size: 22px; line-height: 28px; margin-top: 4px; }
 .tx-sheet-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-.tx-due { padding: 6px 10px; background: var(--panel-2); box-shadow: inset 4px 0 0 var(--lamp); }
 .tx-fb { padding: 8px 10px; background: var(--lamp-soft); }
 .tx-fb-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .tx-peers { display: flex; flex-direction: column; gap: 8px; }

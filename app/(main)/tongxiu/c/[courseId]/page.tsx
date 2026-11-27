@@ -70,7 +70,7 @@ export default function CoursePage() {
             </div>
           </section>
           <section className="card">
-            <div className="cardhead"><h2>按周安排</h2><span className="hint">每周一步，截止日都是那周最后一天；带 ★ 的步骤测试过了就自动完成</span></div>
+            <div className="cardhead"><h2>按周安排</h2><span className="hint">每周一步，只是建议的节奏，没有截止；带 ★ 的步骤测试过了就自动完成</span></div>
             <div className="cardbody"><Schedule course={course} now={app.now} /></div>
           </section>
         </div>
@@ -91,7 +91,7 @@ export default function CoursePage() {
           <section className="card">
             <div className="cardhead"><h2>开一期</h2></div>
             <div className="cardbody tx-form">
-              <p className="muted">一期同修放在一个自习室里：里面的人都能看到、都能加入（最多 12 人）。截止时间按地球上最晚的时区（UTC-12）算，谁都不会少一天。</p>
+              <p className="muted">一期同修放在一个自习室里：里面的人都能看到、都能加入（最多 12 人）。没有截止时间，大家按自己的节奏修。</p>
               <div className="field">
                 <label className="label" htmlFor="tx-room">在哪个自习室</label>
                 <select id="tx-room" className="input select" value={roomId || "new"} onChange={(e) => setRoomId(e.target.value)} disabled={busy}>
@@ -108,7 +108,7 @@ export default function CoursePage() {
               <div className="field">
                 <label className="label" htmlFor="tx-start">第 1 周从哪天开始</label>
                 <input id="tx-start" className="input" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} disabled={busy} />
-                {/^\d{4}-\d{2}-\d{2}$/.test(startsOn) && <span className="muted" style={{ marginTop: 4 }}>{keyLabel(startsOn)} 开始，每周的那一步在第 7 天截止</span>}
+                {/^\d{4}-\d{2}-\d{2}$/.test(startsOn) && <span className="muted" style={{ marginTop: 4 }}>{keyLabel(startsOn)} 开始，之后每周排一步</span>}
               </div>
               <div className="field">
                 <label className="label" htmlFor="tx-name">这一期叫什么</label>

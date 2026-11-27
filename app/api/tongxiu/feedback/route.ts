@@ -7,7 +7,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { after } from "next/server";
 import { getCourse } from "@/lib/courses";
-import { feedbackPrompt, isLate, starStates } from "@/lib/tongxiu";
+import { feedbackPrompt, starStates } from "@/lib/tongxiu";
 import { readLink } from "@/lib/aiFeedback";
 import { toTestResults } from "@/lib/backend/supabase";
 
@@ -74,7 +74,7 @@ async function writeFeedback(db: SupabaseClient, sub: any) {
   const tests = sub.tests_total ? `通过 ${sub.tests_passed ?? 0}/${sub.tests_total}` : "";
   const prompt = feedbackPrompt({
     course, m, learner: (prof as any)?.name || "这位同学", tests, metric: sub.metric != null ? String(sub.metric) : "",
-    link, note: (detail as any)?.note || "", late: isLate({ firstSubmittedAt: Date.parse(sub.first_submitted_at), dueAt: Date.parse(sub.due_at) }), extra,
+    link, note: (detail as any)?.note || "", extra,
   });
 
   const client = new Anthropic();

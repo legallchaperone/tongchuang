@@ -150,7 +150,7 @@ lib/dayCard.ts       一天的分享图
 lib/profileCard.ts   主页分享图
 lib/stats.ts         统计（按各自时区分日）
 lib/courses/         同修的课表（每门课一个文件，开发者整理）
-lib/tongxiu.ts       同修：截止时间（UTC-12）、星星与进度、上报命令、给 Claude 的提示词
+lib/tongxiu.ts       同修：按周的课表、星星与进度、上报命令、给 Claude 的提示词
 lib/junit.ts         把 pytest 的 JUnit XML 读成“测试 → 过没过”
 app/api/tongxiu/     report/：终端上报测试结果（凭上报码写入，打印点亮了哪些星星）；feedback/：调用 Claude 写作业反馈
 lib/aiFeedback.ts    给 Claude 看的报告：GitHub 上的 PDF 按链接附上，文本文件取回来放进提示词

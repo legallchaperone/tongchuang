@@ -57,7 +57,7 @@ export function useCohortWork(cohortId: string | null) {
       setSubs((l) => [...(l || []).filter((x) => x.id !== s.id), s]);
     });
     const offT = app.backend.subscribeTestResults([cohortId], (t) => setTests((m) => ({ ...m, [t.userId]: t })));
-    // a deadline passing makes classmates' work readable: look again every few minutes
+    // a step's week ending makes classmates' work readable: look again every few minutes
     const t = setInterval(() => { if (document.visibilityState === "visible") reload(); }, 5 * 60_000);
     return () => { off(); offT(); clearInterval(t); };
   }, [app.backend, cohortId, reload]);

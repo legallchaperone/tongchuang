@@ -4,7 +4,7 @@ import type { AuthUser, Cohort, CohortMember, DailyReview, GuestbookEntry, Kudos
 import { checkGuestbook, GB_MISSING } from "../guestbook";
 import { checkComment, COMMENT_MISSING } from "../comments";
 import { checkTodo, TODO_MISSING } from "../todos";
-import { FEEDBACK_MAX, LINK_MAX, MAX_EXTENSIONS, NOTE_MAX, TONGXIU_MISSING } from "../tongxiu";
+import { FEEDBACK_MAX, LINK_MAX, NOTE_MAX, TONGXIU_MISSING } from "../tongxiu";
 const FOLDER_MISSING = "文件夹还没开通：需要在 Supabase 里重新执行一遍 supabase/schema.sql";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -547,11 +547,6 @@ export function createSupabaseBackend(url: string, key: string): Backend {
       const { error } = await sb.from("cohort_members").update({ left_at: new Date().toISOString() }).eq("cohort_id", cohortId).eq("user_id", await myId());
       if (error) throw txError(error);
     },
-    async setExtensions(cohortId, ids) {
-      if (ids.length > MAX_EXTENSIONS) throw new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
-      const { error } = await sb.from("cohort_members").update({ extensions: ids }).eq("cohort_id", cohortId).eq("user_id", await myId());
-      if (error) throw txError(error);
-    },
     async listSubmissions(cohortIds) {
       if (!cohortIds.length) return [];
       const { data, error } = await sb.from("submissions").select("*").in("cohort_id", cohortIds);
@@ -733,7 +728,7 @@ const toCohort = (r: any): Cohort => ({
   createdBy: r.created_by, createdAt: ts(r.created_at) || 0,
 });
 const toMember = (r: any): CohortMember => ({
-  cohortId: r.cohort_id, userId: r.user_id, subjectId: r.subject_id || null, extensions: Array.isArray(r.extensions) ? r.extensions : [],
+  cohortId: r.cohort_id, userId: r.user_id, subjectId: r.subject_id || null,
   joinedAt: ts(r.joined_at) || 0, leftAt: ts(r.left_at),
 });
 const num = (v: any) => (v == null ? null : Number(v));
@@ -753,7 +748,6 @@ function txError(e: { message: string; code?: string }): Error {
   const m = e.message || "";
   if (e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST202" || (/cohort|submission|staff|test_results|report_token/.test(m) && /does not exist|schema cache|Could not find/i.test(m))) return new Error(TONGXIU_MISSING);
   if (/row-level security/i.test(m)) return new Error("没有权限：同修只对这个自习室里的人开放");
-  if (/extensions_check|cardinality/.test(m)) return new Error(`每期最多 ${MAX_EXTENSIONS} 张缓交卡`);
   if (/name_check/.test(m)) return new Error("名字 1–40 个字");
   if (/fetch|network/i.test(m)) return new Error("连不上服务器，稍后再试");
   return new Error(m);

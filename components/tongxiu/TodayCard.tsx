@@ -6,7 +6,7 @@ import { useApp } from "@/lib/store";
 import { useFocus } from "@/lib/focus";
 import { getCourse } from "@/lib/courses";
 import { useCohorts, useCohortWork } from "@/lib/useTongxiu";
-import { courseWeek, currentStep, leftLabel, starsLit } from "@/lib/tongxiu";
+import { courseWeek, currentStep, starsLit } from "@/lib/tongxiu";
 import { Avatar } from "@/components/bits";
 import { IPlay } from "@/components/Icons";
 import { Stars } from "./Schedule";
@@ -42,7 +42,7 @@ export function TongxiuTodayCard({ style }: { style?: React.CSSProperties }) {
   const course = getCourse(cohort.courseId)!;
   const me = live(cohort.id).find((m) => m.userId === meId)!;
   const subs = work.subs || [];
-  const cur = currentStep(course, cohort, me, subs.filter((s) => s.userId === meId), work.tests[meId], app.now);
+  const cur = currentStep(course, cohort, subs.filter((s) => s.userId === meId), work.tests[meId], app.now);
   const wk = courseWeek(cohort, app.now, app.myProfile!.tz);
   const board = live(cohort.id).map((m) => ({ m, n: starsLit(course, work.tests[m.userId]) })).sort((a, b) => b.n - a.n);
   const focusing = !!focus.state && focus.state.phase !== "breakDone";
@@ -59,7 +59,7 @@ export function TongxiuTodayCard({ style }: { style?: React.CSSProperties }) {
             <Link href={`/tongxiu/${cohort.id}`} className="tx-now-title">
               <b>{cur.m.title}</b>{cur.st.total > 0 && <Stars lit={cur.st.lit} total={cur.st.total} />}
             </Link>
-            <span className={cur.st.due < app.now ? "td-err" : "muted"}>{leftLabel(cur.st.due, app.now)}</span>
+            <span className="muted">课表里排在第 {cur.m.week} 周</span>
           </>
         ) : <b>这门课全部完成了 🎉</b>}
         <div className="tx-board">

@@ -424,7 +424,8 @@ alter table public.profiles add column if not exists page jsonb;
 -- ───────────── R-030 同修 ─────────────
 -- 一门课的课表写在前端（lib/courses/），数据库只存“一期”、谁加入了、谁交了什么、开发者写的反馈。可重复运行。
 -- 一期同修挂在一个自习室下面：自习室的人能看到这一期、能加入；人数沿用自习室的 12 人上限。
--- 截止时间按“地球上最晚的时区”（UTC-12）算，由前端算好写进 submissions.due_at（用了缓交卡的会晚 3 天）。
+-- 同修没有截止时间。submissions.due_at 是这一步在课表里那一周结束的时刻（按“地球上最晚的时区”UTC-12 算，由前端写入），
+-- 只用来决定同修们什么时候能看到彼此交的内容。
 
 -- 开发者（写 AI 反馈的人）。没有写入策略：只能在 SQL Editor 里加，例如
 --   insert into public.staff(user_id) select id from auth.users where email = '你的邮箱';
@@ -472,7 +473,7 @@ create table if not exists public.cohort_members (
   cohort_id uuid not null references public.cohorts(id) on delete cascade,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   subject_id uuid references public.subjects(id) on delete set null,
-  extensions text[] not null default '{}' check (cardinality(extensions) <= 3),
+  extensions text[] not null default '{}' check (cardinality(extensions) <= 3), -- 以前的缓交卡，已不再使用
   joined_at timestamptz not null default now(),
   left_at timestamptz,
   primary key (cohort_id, user_id)
@@ -504,7 +505,7 @@ create table if not exists public.submissions (
 create index if not exists submissions_cohort_idx on public.submissions(cohort_id);
 create index if not exists submissions_feedback_idx on public.submissions(feedback_requested_at desc) where feedback_requested_at is not null;
 
--- 第一次交的时间由数据库记，之后改内容不会变；“迟交”就看它和 due_at
+-- 第一次交的时间由数据库记，之后改内容不会变
 create or replace function public.guard_submission()
 returns trigger language plpgsql as $$
 begin
@@ -537,7 +538,7 @@ create policy "submissions write own" on public.submissions for insert with chec
 drop policy if exists "submissions edit own" on public.submissions;
 create policy "submissions edit own" on public.submissions for update using (user_id = auth.uid()) with check (user_id = auth.uid() and public.in_cohort_room(cohort_id));
 
--- 交的内容（链接、说明）：截止前只有自己看得到；截止后、或者我自己也交了同一个阶段之后，同一期的人才能看（自己选了不公开的除外）
+-- 交的内容（链接、说明）：这一步那一周结束前只有自己看得到；之后、或者我自己也交了同一个阶段之后，同一期的人才能看（自己选了不公开的除外）
 create table if not exists public.submission_details (
   submission_id uuid primary key references public.submissions(id) on delete cascade,
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,

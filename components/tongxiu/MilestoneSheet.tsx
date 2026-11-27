@@ -1,33 +1,27 @@
 "use client";
-// R-030 同修: one milestone — what to hand in, when, my submission, and what classmates handed in
+// R-030 同修: one milestone — what to hand in, my submission, and what classmates handed in
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import type { Course, Milestone } from "@/lib/courses";
 import { KIND_LABEL } from "@/lib/courses";
 import type { Cohort, CohortMember, Submission, SubmissionDetail, SubmissionFeedback, TestResults } from "@/lib/types";
-import {
-  dueAt, dueDay, EXTENSION_DAYS, stepStatus, isLate, keyLabel, leftLabel, LINK_MAX, localDeadline, MAX_EXTENSIONS, NOTE_MAX, parsePytest,
-} from "@/lib/tongxiu";
+import { dueAt, LINK_MAX, NOTE_MAX, parsePytest, stepStatus } from "@/lib/tongxiu";
 import { ago } from "@/lib/time";
 import { Avatar } from "@/components/bits";
 import { IClose } from "@/components/Icons";
 import { RunTests } from "./RunTests";
 import { Stars } from "./Schedule";
 
-export function MilestoneSheet({ course, cohort, m, me, members, subs, details, feedback, tests, onSaved, onExtensions, onClose }: {
+export function MilestoneSheet({ course, cohort, m, me, members, subs, details, feedback, tests, onSaved, onClose }: {
   course: Course; cohort: Cohort; m: Milestone; me: CohortMember | null; members: CohortMember[];
   subs: Submission[]; details: Record<string, SubmissionDetail>; feedback: SubmissionFeedback[]; tests: Record<string, TestResults>;
-  onSaved: (s: Submission, d: SubmissionDetail) => void; onExtensions: (ids: string[]) => Promise<void>; onClose: () => void;
+  onSaved: (s: Submission, d: SubmissionDetail) => void; onClose: () => void;
 }) {
   const app = useApp();
-  const tz = app.myProfile!.tz;
   const now = app.now;
   const mySub = me ? subs.find((s) => s.userId === me.userId && s.milestoneId === m.id) : undefined;
   const myDetail = mySub ? details[mySub.id] : undefined;
-  const due = dueAt(cohort, m, me);
-  const extended = !!me?.extensions.includes(m.id);
-  const cardsLeft = MAX_EXTENSIONS - (me?.extensions.length || 0);
-  const myStep = stepStatus(cohort, m, me, mySub, me ? tests[me.userId] : undefined, now);
+  const myStep = stepStatus(cohort, m, mySub, me ? tests[me.userId] : undefined, now);
   const hasStars = !!m.stars?.length;
 
   const [link, setLink] = useState(myDetail?.link || "");
@@ -76,12 +70,12 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
     try {
       const r = await app.backend.saveSubmission({
         cohortId: cohort.id, milestoneId: m.id, testsPassed: p, testsTotal: t ?? (p != null ? p : null), metric: x,
-        dueAt: due, link, note, private: priv, requestFeedback: askFb,
+        dueAt: dueAt(cohort, m), link, note, private: priv, requestFeedback: askFb,
       });
       onSaved(r.submission, r.detail);
       if (askFb) setAiState(await app.backend.requestAiFeedback(r.submission.id));
       setAskFb(false);
-      app.pushToast({ title: mySub ? "已更新" : isLate(r.submission) ? "交上去了（迟交）" : "交上去了", body: m.title, ttl: 3500 });
+      app.pushToast({ title: mySub ? "已更新" : "交上去了", body: m.title, ttl: 3500 });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
@@ -105,11 +99,6 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
           <button className="iconbtn" onClick={onClose} aria-label="关闭"><IClose /></button>
         </div>
 
-        <div className="tx-due">
-          <div><b>{keyLabel(dueDay(cohort.startsOn, m, extended))}</b> 截止{extended ? `（用了缓交卡，晚 ${EXTENSION_DAYS} 天）` : ""}</div>
-          <div className="muted">按地球上最晚的时区算；你这里是 {localDeadline(due, tz)} · {leftLabel(due, now)}</div>
-        </div>
-
         <div className="tx-prose">
           <p>{m.summary}</p>
           <h3>要交</h3>
@@ -125,7 +114,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
             <div className="tx-form-head">
               <h2>星星</h2>
               <Stars lit={me && !me.leftAt ? myStep.lit : 0} total={myStep.total} />
-              {me && !me.leftAt && myStep.doneAt != null && <span className="state-pill focus">{myStep.state === "late" ? "完成了（晚了）" : "完成了"}</span>}
+              {me && !me.leftAt && myStep.doneAt != null && <span className="state-pill focus">完成了</span>}
             </div>
             <div className="tx-starlist">
               {myStep.stars.map((x) => (
@@ -144,20 +133,13 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
             <div className="tx-actions">
               <button className="btn" onClick={() => setWriting(true)}>写点什么（可选）</button>
               <button className="btn ghost" onClick={addTodo}>加到待办</button>
-              {!extended && cardsLeft > 0 && (
-                <button className="btn ghost" onClick={async () => {
-                  try { await onExtensions([...(me.extensions || []), m.id]); app.pushToast({ title: `截止延后 ${EXTENSION_DAYS} 天`, body: `还剩 ${cardsLeft - 1} 张缓交卡`, ttl: 3500 }); }
-                  catch (e) { setErr((e as Error).message); }
-                }}>用缓交卡（晚 {EXTENSION_DAYS} 天，剩 {cardsLeft} 张）</button>
-              )}
-              {extended && <button className="btn ghost" onClick={() => onExtensions(me.extensions.filter((x) => x !== m.id)).catch((e) => setErr((e as Error).message))}>收回缓交卡</button>}
             </div>
             {err && <p className="td-err">{err}</p>}
           </section>
         ) : me && !me.leftAt ? (
           <section className="tx-form">
             <div className="tx-form-head">
-              <h2>{mySub ? (isLate(mySub) ? "我交的（迟交）" : "我交的") : hasStars ? "写点什么" : "交作业"}</h2>
+              <h2>{mySub ? "我交的" : hasStars ? "写点什么" : "交作业"}</h2>
               {hasStars && !mySub && <button type="button" className="btn ghost sm" onClick={() => setWriting(false)} disabled={busy}>收起</button>}
               {mySub && <span className="muted">第一次交于 {ago(mySub.firstSubmittedAt, now)}{mySub.updatedAt - mySub.firstSubmittedAt > 60_000 ? ` · 改于 ${ago(mySub.updatedAt, now)}` : ""}</span>}
             </div>
@@ -188,20 +170,11 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
               <span className="muted" style={{ textAlign: "right" }}>{note.length}/{NOTE_MAX}</span>
             </div>
             <label className="tx-check"><input type="checkbox" checked={askFb} onChange={(e) => setAskFb(e.target.checked)} disabled={busy} /> 请 Claude 帮我看看（一两分钟内给反馈，写好了会提醒你）</label>
-            <label className="tx-check"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} disabled={busy} /> 截止后也只给自己看（同修们只看得到交没交、测试数）</label>
+            <label className="tx-check"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} disabled={busy} /> 只给自己看（同修们只看得到交没交、测试数）</label>
             {err && <p className="td-err">{err}</p>}
             <div className="tx-actions">
-              <button className="btn primary" onClick={save} disabled={busy}>{busy ? "正在保存…" : mySub ? "更新" : hasStars ? "保存" : now > due ? "交上去（迟交）" : "交上去"}</button>
+              <button className="btn primary" onClick={save} disabled={busy}>{busy ? "正在保存…" : mySub ? "更新" : hasStars ? "保存" : "交上去"}</button>
               <button className="btn ghost" onClick={addTodo} disabled={busy}>加到待办</button>
-              {!mySub && !extended && cardsLeft > 0 && (
-                <button className="btn ghost" disabled={busy} onClick={async () => {
-                  try { await onExtensions([...(me.extensions || []), m.id]); app.pushToast({ title: `截止延后 ${EXTENSION_DAYS} 天`, body: `还剩 ${cardsLeft - 1} 张缓交卡`, ttl: 3500 }); }
-                  catch (e) { setErr((e as Error).message); }
-                }}>用缓交卡（晚 {EXTENSION_DAYS} 天，剩 {cardsLeft} 张）</button>
-              )}
-              {!mySub && extended && (
-                <button className="btn ghost" disabled={busy} onClick={() => onExtensions(me.extensions.filter((x) => x !== m.id)).catch((e) => setErr((e as Error).message))}>收回缓交卡</button>
-              )}
             </div>
             {waiting && (
               <p className="muted">{
@@ -230,20 +203,20 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
             const s = subs.find((y) => y.userId === x.userId && y.milestoneId === m.id);
             const d = s ? details[s.id] : undefined;
             const fb = s ? feedback.filter((f) => f.submissionId === s.id) : [];
-            const ps = stepStatus(cohort, m, x, s, tests[x.userId], now);
+            const ps = stepStatus(cohort, m, s, tests[x.userId], now);
             return (
               <div key={x.userId} className="tx-peer">
                 <div className="tx-peer-head">
                   <Avatar p={p} size={22} showSky={false} /><b>{p?.name || "同窗"}</b>
                   {hasStars && <Stars lit={ps.lit} total={ps.total} />}
-                  {ps.doneAt != null && !s && <span className="muted">{ps.state === "late" ? "完成了（晚了）" : "完成了"}</span>}
+                  {ps.doneAt != null && !s && <span className="muted">完成了</span>}
                   {s ? (
                     <span className="muted">
-                      {isLate(s) ? "迟交 · " : ""}{ago(s.firstSubmittedAt, now)}交的
+                      {ago(s.firstSubmittedAt, now)}交的
                       {s.testsTotal ? ` · 测试 ${s.testsPassed ?? 0}/${s.testsTotal}` : ""}
                       {s.metric != null ? ` · ${m.metric?.name || "指标"} ${s.metric}` : ""}
                     </span>
-                  ) : ps.doneAt == null ? <span className="muted">{hasStars ? "还在点星星" : "还没交"}{x.extensions.includes(m.id) ? "（用了缓交卡）" : ""}</span> : null}
+                  ) : ps.doneAt == null ? <span className="muted">{hasStars ? "还在点星星" : "还没交"}</span> : null}
                 </div>
                 {s && d && (
                   <div className="tx-peer-body">
@@ -252,7 +225,7 @@ export function MilestoneSheet({ course, cohort, m, me, members, subs, details, 
                     {fb.map((f) => <details key={f.id}><summary className="muted">{f.source === "ai" ? "Claude 的反馈" : "开发者的反馈"}</summary><div className="tx-fb-text">{f.text}</div></details>)}
                   </div>
                 )}
-                {s && !d && <p className="muted tx-peer-body">截止之后、或者你也交了之后能看到内容（除非 TA 选了只给自己看）。</p>}
+                {s && !d && <p className="muted tx-peer-body">这一步排的那周过完之后、或者你也交了之后能看到内容（除非 TA 选了只给自己看）。</p>}
               </div>
             );
           })}

@@ -1,12 +1,12 @@
 "use client";
-// R-030 同修: one cohort — what is due, everyone's progress, the plan, and handing in
+// R-030 同修: one cohort — what to work on, everyone's progress, the plan, and handing in
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/lib/store";
 import { getCourse, type Milestone } from "@/lib/courses";
 import { useCohorts, useCohortWork } from "@/lib/useTongxiu";
-import { courseWeek, currentStep, keyLabel, leftLabel, localDeadline, MAX_EXTENSIONS, stepStatus, upcoming } from "@/lib/tongxiu";
+import { courseWeek, currentStep, keyLabel, stepStatus, upcoming } from "@/lib/tongxiu";
 import { useFocus } from "@/lib/focus";
 import { DAY } from "@/lib/time";
 import { HISTORY_DAYS } from "@/lib/store";
@@ -72,10 +72,10 @@ export default function CohortPage() {
   const wk = courseWeek(cohort, now, tz);
   const mySubs = subs.filter((s) => s.userId === meId);
   const myTests = work.tests[meId];
-  const next = joined ? upcoming(course, cohort, me, mySubs, myTests, now) : [];
-  const cur = joined ? currentStep(course, cohort, me, mySubs, myTests, now) : null;
+  const next = joined ? upcoming(course, cohort, mySubs, myTests, now) : [];
+  const cur = joined ? currentStep(course, cohort, mySubs, myTests, now) : null;
   const doneHere = cur ? active.filter((m) => m.userId !== meId
-    && stepStatus(cohort, cur.m, m, subs.find((x) => x.userId === m.userId && x.milestoneId === cur.m.id), work.tests[m.userId], now).doneAt != null) : [];
+    && stepStatus(cohort, cur.m, subs.find((x) => x.userId === m.userId && x.milestoneId === cur.m.id), work.tests[m.userId], now).doneAt != null) : [];
   const focusing = !!focus.state && focus.state.phase !== "breakDone";
   const inRoom = !!room;
 
@@ -101,10 +101,6 @@ export default function CohortPage() {
     const prof = app.myProfile!;
     focus.start({ mode: "pomodoro", minutes: prof.pomodoroMin, task: `${course!.name} ${cur.m.title}`, subjectId: me.subjectId, withUser: null, todoId: null });
     router.push("/focus");
-  }
-  async function setExtensions(ids: string[]) {
-    await app.backend.setExtensions(cohort!.id, ids);
-    setMembers((l) => l.map((x) => (x.cohortId === cohort!.id && x.userId === meId ? { ...x, extensions: ids } : x)));
   }
 
   return (
@@ -133,7 +129,7 @@ export default function CohortPage() {
           <h2>{me?.leftAt ? "回来继续修" : "一起修这门课"}</h2>
           {inRoom ? (
             <>
-              <p>每周一步。大部分步骤不用“交”：在终端里跑一条命令，官方测试过了，星星就自己亮，同修们实时看得到。加入后会给你建一个科目「{course.name}」，专注时长自动算进这门课。晚了也没关系，只会标“晚了”；每人还有 {MAX_EXTENSIONS} 张缓交卡，一张能晚 3 天。</p>
+              <p>每周一步。大部分步骤不用“交”：在终端里跑一条命令，官方测试过了，星星就自己亮，同修们实时看得到。加入后会给你建一个科目「{course.name}」，专注时长自动算进这门课。没有截止时间，按周排的只是建议，按自己的节奏来就好。</p>
               <div><button className="btn primary" onClick={join} disabled={busy}>{busy ? "正在加入…" : me?.leftAt ? "重新加入" : "加入这一期"}</button></div>
             </>
           ) : <p className="muted">这一期在别人的自习室里，你是开发者所以能看到。加入那个自习室之后才能一起修。</p>}
@@ -144,7 +140,7 @@ export default function CohortPage() {
         <section className="card tx-now">
           <div className="cardhead">
             <h2>现在做</h2>
-            <span className="hint">{leftLabel(cur.st.due, now)} · 你这里是 {localDeadline(cur.st.due, tz)} · 缓交卡还剩 {MAX_EXTENSIONS - me!.extensions.length} 张</span>
+            <span className="hint">课表里排在第 {cur.m.week} 周</span>
           </div>
           <div className="cardbody tx-form">
             <button type="button" className="tx-now-title" onClick={() => setOpen(cur.m)}>
@@ -160,10 +156,10 @@ export default function CohortPage() {
             {cur.m.repo && <RunTests course={course} cohort={cohort} step={cur.m} mine={myTests} />}
             {next.filter((x) => x.m.id !== cur.m.id).length > 0 && (
               <div className="tx-list">
-                <span className="muted">也快到期了：</span>
+                <span className="muted">也可以做：</span>
                 {next.filter((x) => x.m.id !== cur.m.id).map(({ m, st }) => (
-                  <button key={m.id} type="button" className={`tx-li ${st.due < now ? "over" : ""}`} onClick={() => setOpen(m)}>
-                    <b>{m.title}</b><span className="muted">{leftLabel(st.due, now)}</span>
+                  <button key={m.id} type="button" className="tx-li" onClick={() => setOpen(m)}>
+                    <b>{m.title}</b><span className="muted">第 {m.week} 周{st.total ? ` · ★ ${st.lit}/${st.total}` : ""}</span>
                   </button>
                 ))}
               </div>
@@ -183,7 +179,7 @@ export default function CohortPage() {
       </section>
 
       <section className="card">
-        <div className="cardhead"><h2>按周安排</h2><span className="hint">截止都按地球上最晚的时区（UTC-12）算</span></div>
+        <div className="cardhead"><h2>按周安排</h2><span className="hint">建议的节奏，没有截止</span></div>
         <div className="cardbody"><Schedule course={course} cohort={cohort} member={joined ? me : null} mine={mySubs} tests={myTests} now={now} currentWeek={wk} onOpen={setOpen} /></div>
       </section>
 
@@ -192,7 +188,6 @@ export default function CohortPage() {
           course={course} cohort={cohort} m={open} me={joined ? me : null} members={cms}
           subs={subs} details={work.details} feedback={work.feedback} tests={work.tests}
           onSaved={(s, d) => { work.put(s, d); work.reload(); }}
-          onExtensions={setExtensions}
           onClose={() => setOpen(null)}
         />
       )}

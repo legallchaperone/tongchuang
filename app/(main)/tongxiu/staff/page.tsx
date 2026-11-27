@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "@/lib/store";
 import { getCourse } from "@/lib/courses";
-import { feedbackPrompt, isLate } from "@/lib/tongxiu";
+import { feedbackPrompt } from "@/lib/tongxiu";
 import { ago } from "@/lib/time";
 import type { Cohort, Profile, Submission, SubmissionDetail, SubmissionFeedback } from "@/lib/types";
 import { Avatar, Spinner } from "@/components/bits";
@@ -89,7 +89,7 @@ function Request({ s, cohort, detail, person, feedback, done, onAdded }: {
     if (!course || !m) return;
     const prompt = feedbackPrompt({
       course, m, learner: person?.name || "这位同学", tests, metric: s.metric != null ? String(s.metric) : "",
-      link: detail?.link || "", note: detail?.note || "", late: isLate(s),
+      link: detail?.link || "", note: detail?.note || "",
     });
     try { await navigator.clipboard.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { app.pushToast({ title: "复制失败", body: "浏览器不让写剪贴板" }); }
@@ -111,7 +111,7 @@ function Request({ s, cohort, detail, person, feedback, done, onAdded }: {
       </div>
       <div className="cardbody tx-form">
         <div className="tx-peer-head"><Avatar p={person} size={22} showSky={false} /><b>{person?.name || "同学"}</b>
-          <span className="muted">{cohort?.name || ""}{isLate(s) ? " · 迟交" : ""}{tests ? ` · ${tests}` : ""}{s.metric != null ? ` · ${m?.metric?.name || "指标"} ${s.metric}` : ""}</span>
+          <span className="muted">{cohort?.name || ""}{tests ? ` · ${tests}` : ""}{s.metric != null ? ` · ${m?.metric?.name || "指标"} ${s.metric}` : ""}</span>
         </div>
         {detail?.link && <a className="tx-link" href={detail.link} target="_blank" rel="noreferrer nofollow">{detail.link}</a>}
         {detail?.note ? <div className="tx-fb-text">{detail.note}</div> : <p className="muted">没有写说明。</p>}
